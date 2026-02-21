@@ -1,17 +1,15 @@
-# Ignore virtual environments
-venv/
-*.pyc
+# IDE files
+.idea/
+*.iml
+
+# Model files
+*.pt
+*.weights
+
+# Output files
+*.avi
+*.mp4
+
+# Python cache
 __pycache__/
-
-# Ignore OS-specific files
-.DS_Store
-Thumbs.db
-
-# Ignore sensitive information
-.env
-credentials.json
-
-# Ignore build artifacts
-build/
-dist/
-*.egg-info
+*.pyc
