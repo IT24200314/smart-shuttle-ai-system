@@ -149,7 +149,7 @@ class RevenueDashboardScreen extends StatelessWidget {
             // ── Revenue Forecast Line Chart ───────────────────
             GlassCard(
               padding: const EdgeInsets.all(18),
-              borderColor: AppTheme.emerald.withOpacity(0.3),
+              borderColor: AppTheme.emerald.withValues(alpha: 0.3),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -165,12 +165,14 @@ class RevenueDashboardScreen extends StatelessWidget {
                                 const Icon(Icons.auto_awesome_rounded,
                                     color: AppTheme.emerald, size: 16),
                                 const SizedBox(width: 6),
-                                Text('AI-Powered Revenue Forecasting',
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textPrimary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    )),
+                                Expanded(
+                                  child: Text('AI-Powered Revenue Forecasting',
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      )),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 3),
@@ -200,7 +202,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                       const SizedBox(width: 16),
                       const _LegendLine(label: 'Actual Revenue', color: Color(0xFF7C4DFF), dashed: false),
                       const SizedBox(width: 16),
-                      _LegendLine(label: 'Confidence Band', color: AppTheme.emerald.withOpacity(0.3), dashed: true),
+                      _LegendLine(label: 'Confidence Band', color: AppTheme.emerald.withValues(alpha: 0.3), dashed: true),
                     ],
                   ),
                 ],
@@ -257,7 +259,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                       const SizedBox(width: 16),
                       Container(width: 12, height: 12,
                           decoration: BoxDecoration(
-                            color: AppTheme.emerald.withOpacity(0.4),
+                            color: AppTheme.emerald.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(3),
                           )),
                       const SizedBox(width: 5),
@@ -282,12 +284,13 @@ class RevenueDashboardScreen extends StatelessWidget {
                       const Icon(Icons.table_chart_rounded,
                           color: AppTheme.emerald, size: 18),
                       const SizedBox(width: 8),
-                      Text('Trip Revenue Breakdown',
-                          style: GoogleFonts.inter(
-                              color: AppTheme.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700)),
-                      const Spacer(),
+                      Expanded(
+                        child: Text('Trip Revenue Breakdown',
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                      ),
                       const _Badge('Firestore', Color(0xFFF57C00)),
                     ],
                   ),
@@ -314,13 +317,13 @@ class _ModelStatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderColor: AppTheme.emerald.withOpacity(0.5),
+      borderColor: AppTheme.emerald.withValues(alpha: 0.5),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.emerald.withOpacity(0.15),
+              color: AppTheme.emerald.withValues(alpha: 0.15),
               borderRadius: AppTheme.borderRadius,
             ),
             child: const Icon(Icons.memory_rounded,
@@ -432,8 +435,8 @@ class _ForecastLineChart extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  AppTheme.emerald.withOpacity(0.20),
-                  AppTheme.emerald.withOpacity(0.0),
+                  AppTheme.emerald.withValues(alpha: 0.20),
+                  AppTheme.emerald.withValues(alpha: 0.0),
                 ],
               ),
             ),
@@ -526,14 +529,14 @@ class _HourlyBarChart extends StatelessWidget {
                 toY: e.value,
                 color: isPeak
                     ? AppTheme.emerald
-                    : AppTheme.emerald.withOpacity(0.35),
+                    : AppTheme.emerald.withValues(alpha: 0.35),
                 width: 7,
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4)),
                 backDrawRodData: BackgroundBarChartRodData(
                   show: true,
                   toY: 110,
-                  color: Colors.white.withOpacity(0.03),
+                  color: Colors.white.withValues(alpha: 0.03),
                 ),
               ),
             ],
@@ -562,7 +565,7 @@ class _TripDataTable extends StatelessWidget {
         // Header row
         TableRow(
           decoration: BoxDecoration(
-            color: AppTheme.emerald.withOpacity(0.08),
+            color: AppTheme.emerald.withValues(alpha: 0.08),
             borderRadius: AppTheme.borderRadius,
           ),
           children: ['Trip ID', 'Bus No.', 'Pax', 'Est. Revenue']
@@ -572,7 +575,7 @@ class _TripDataTable extends StatelessWidget {
         ...entries.asMap().entries.map((e) => TableRow(
           decoration: BoxDecoration(
             color: e.key.isEven
-                ? Colors.white.withOpacity(0.03)
+                ? Colors.white.withValues(alpha: 0.03)
                 : Colors.transparent,
           ),
           children: [
@@ -636,9 +639,9 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.12),
+      color: color.withValues(alpha: 0.12),
       borderRadius: AppTheme.borderRadius,
-      border: Border.all(color: color.withOpacity(0.4)),
+      border: Border.all(color: color.withValues(alpha: 0.4)),
     ),
     child: Text(label,
         style: GoogleFonts.inter(
@@ -658,7 +661,7 @@ class _LegendLine extends StatelessWidget {
     children: [
       Container(
         width: 14, height: 2.5,
-        color: dashed ? color.withOpacity(0.6) : color,
+        color: dashed ? color.withValues(alpha: 0.6) : color,
       ),
       const SizedBox(width: 5),
       Text(label,

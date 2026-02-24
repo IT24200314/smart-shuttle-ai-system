@@ -37,9 +37,9 @@ class CrowdDensityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: _color.withOpacity(0.15),
+        color: _color.withValues(alpha: 0.15),
         borderRadius: AppTheme.borderRadius,
-        border: Border.all(color: _color.withOpacity(0.5), width: 1),
+        border: Border.all(color: _color.withValues(alpha: 0.5), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/kpi_card.dart';
@@ -104,7 +105,88 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             _AiBadge(),
             const SizedBox(height: 16),
 
+            // ── 🔥 Live Firebase AI Feed ──────────────────────
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('live_status')
+                  .doc('bus_01')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                int livePassengers = 0;
+                double liveRevenue = 0.0;
+
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data =
+                      snapshot.data!.data() as Map<String, dynamic>?;
+                  livePassengers = (data?['passenger_count'] ?? 0) as int;
+                  liveRevenue =
+                      (data?['estimated_revenue'] ?? 0.0).toDouble();
+                }
+
+                final bool isLoading =
+                    snapshot.connectionState == ConnectionState.waiting;
+
+                return GlassCard(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  borderColor: AppTheme.emerald.withValues(alpha: 0.5),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        // Live dot indicator
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: isLoading
+                                ? Colors.orange
+                                : AppTheme.emerald,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.emerald.withValues(alpha: 0.6),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          isLoading
+                              ? 'Connecting to AI...'
+                              : '🤖 Live AI Feed — Bus 01',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.emerald,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 16), // Replaced Spacer with fixed width so FittedBox can calculate intrinsic width properly
+                        // Passenger count chip
+                        _LiveChip(
+                          icon: Icons.groups_rounded,
+                          label: '$livePassengers passengers',
+                          color: AppTheme.emerald,
+                        ),
+                        const SizedBox(width: 8),
+                        // Revenue chip
+                        _LiveChip(
+                          icon: Icons.attach_money_rounded,
+                          label: 'LKR ${liveRevenue.toStringAsFixed(0)}',
+                          color: const Color(0xFF7C4DFF),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
             // ── KPI Cards ────────────────────────────────────
+
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -246,13 +328,13 @@ class _AiBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      borderColor: AppTheme.emerald.withOpacity(0.4),
+      borderColor: AppTheme.emerald.withValues(alpha: 0.4),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: AppTheme.emerald.withOpacity(0.15),
+              color: AppTheme.emerald.withValues(alpha: 0.15),
               borderRadius: AppTheme.borderRadius,
             ),
             child: const Icon(Icons.auto_awesome_rounded,
@@ -322,10 +404,10 @@ class _ChartHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: badgeColor.withOpacity(0.12),
+            color: badgeColor.withValues(alpha: 0.12),
             borderRadius: AppTheme.borderRadius,
             border:
-                Border.all(color: badgeColor.withOpacity(0.4)),
+                Border.all(color: badgeColor.withValues(alpha: 0.4)),
           ),
           child: Text(badge,
               style: GoogleFonts.inter(
@@ -399,7 +481,7 @@ class _RevenueLineChart extends StatelessWidget {
           LineChartBarData(
             spots: upperBound,
             isCurved: true,
-            color: AppTheme.emerald.withOpacity(0.1),
+            color: AppTheme.emerald.withValues(alpha: 0.1),
             barWidth: 0,
             belowBarData: BarAreaData(show: false),
             dotData: const FlDotData(show: false),
@@ -408,11 +490,11 @@ class _RevenueLineChart extends StatelessWidget {
           LineChartBarData(
             spots: lowerBound,
             isCurved: true,
-            color: AppTheme.emerald.withOpacity(0.1),
+            color: AppTheme.emerald.withValues(alpha: 0.1),
             barWidth: 0,
             belowBarData: BarAreaData(
               show: true,
-              color: AppTheme.emerald.withOpacity(0.08),
+              color: AppTheme.emerald.withValues(alpha: 0.08),
               applyCutOffY: false,
             ),
             dotData: const FlDotData(show: false),
@@ -431,8 +513,8 @@ class _RevenueLineChart extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  AppTheme.emerald.withOpacity(0.25),
-                  AppTheme.emerald.withOpacity(0.0),
+                  AppTheme.emerald.withValues(alpha: 0.25),
+                  AppTheme.emerald.withValues(alpha: 0.0),
                 ],
               ),
             ),
@@ -465,7 +547,7 @@ class _ChartLegend extends StatelessWidget {
       children: [
         const _LegendDot(color: AppTheme.emerald, label: 'AI Prediction'),
         const SizedBox(width: 16),
-        _LegendDot(color: AppTheme.emerald.withOpacity(0.3), label: 'Confidence Band'),
+        _LegendDot(color: AppTheme.emerald.withValues(alpha: 0.3), label: 'Confidence Band'),
       ],
     );
   }
@@ -546,14 +628,14 @@ class _PassengerBarChart extends StatelessWidget {
                 toY: e.value,
                 color: isPeak
                     ? AppTheme.emerald
-                    : AppTheme.emerald.withOpacity(0.4),
+                    : AppTheme.emerald.withValues(alpha: 0.4),
                 width: 8,
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4)),
                 backDrawRodData: BackgroundBarChartRodData(
                   show: true,
                   toY: 110,
-                  color: Colors.white.withOpacity(0.04),
+                  color: Colors.white.withValues(alpha: 0.04),
                 ),
               ),
             ],
@@ -582,7 +664,7 @@ class _AuditLogTable extends StatelessWidget {
         // Header
         TableRow(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
             borderRadius: AppTheme.borderRadius,
           ),
           children: ['Trip ID', 'Bus No.', 'Pax', 'Revenue']
@@ -601,7 +683,7 @@ class _AuditLogTable extends StatelessWidget {
         ...entries.asMap().entries.map((e) => TableRow(
           decoration: BoxDecoration(
             color: e.key.isEven
-                ? Colors.white.withOpacity(0.02)
+                ? Colors.white.withValues(alpha: 0.02)
                 : Colors.transparent,
           ),
           children: [
@@ -652,4 +734,40 @@ class _AuditEntry {
   final int passengers;
   final String revenue;
   const _AuditEntry(this.tripId, this.busNo, this.passengers, this.revenue);
+}
+
+// ── Live Chip (used in StreamBuilder card) ───────────────────
+class _LiveChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _LiveChip(
+      {required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 13),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

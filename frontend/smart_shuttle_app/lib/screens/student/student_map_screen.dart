@@ -250,7 +250,7 @@ class _RoutePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppTheme.emerald.withOpacity(0.85)
+      ..color = AppTheme.emerald.withValues(alpha: 0.85)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -269,11 +269,7 @@ class _RoutePainter extends CustomPainter {
       }
     }
 
-    // Dashed effect
-    final dashPaint = Paint()
-      ..color = AppTheme.emerald.withOpacity(0.3)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+    // Dashed effect (removed unused dashPaint variable)
 
     canvas.drawPath(path, paint);
 
@@ -282,7 +278,7 @@ class _RoutePainter extends CustomPainter {
       canvas.drawCircle(
         Offset(w.dx * screenWidth, w.dy * mapHeight + 40),
         7,
-        Paint()..color = AppTheme.emerald.withOpacity(0.7),
+        Paint()..color = AppTheme.emerald.withValues(alpha: 0.7),
       );
       canvas.drawCircle(
         Offset(w.dx * screenWidth, w.dy * mapHeight + 40),
@@ -314,7 +310,7 @@ class _BusMarker extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.emerald.withOpacity(0.15 * pulseAnim.value),
+              color: AppTheme.emerald.withValues(alpha: 0.15 * pulseAnim.value),
             ),
           ),
           // Bus icon container
@@ -325,7 +321,7 @@ class _BusMarker extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.emerald.withOpacity(0.6),
+                  color: AppTheme.emerald.withValues(alpha: 0.6),
                   blurRadius: 12,
                   spreadRadius: 2,
                 ),
@@ -421,7 +417,7 @@ class _BottomInfoSheet extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppTheme.emerald.withOpacity(0.12),
+                              color: AppTheme.emerald.withValues(alpha: 0.12),
                               borderRadius: AppTheme.borderRadius,
                             ),
                             child: Text('Distance Matrix API',
@@ -476,7 +472,7 @@ class _BottomInfoSheet extends StatelessWidget {
                                 horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
                               color: provider.crowdDensity == d
-                                  ? AppTheme.emerald.withOpacity(0.2)
+                                  ? AppTheme.emerald.withValues(alpha: 0.2)
                                   : Colors.transparent,
                               borderRadius: AppTheme.borderRadius,
                               border: Border.all(

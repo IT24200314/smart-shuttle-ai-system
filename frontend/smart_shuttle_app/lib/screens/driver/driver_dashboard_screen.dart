@@ -92,8 +92,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: provider.sessionActive
-                  ? AppTheme.emerald.withOpacity(0.15)
-                  : AppTheme.danger.withOpacity(0.15),
+                  ? AppTheme.emerald.withValues(alpha: 0.15)
+                  : AppTheme.danger.withValues(alpha: 0.15),
               borderRadius: AppTheme.borderRadius,
               border: Border.all(
                 color: provider.sessionActive ? AppTheme.emerald : AppTheme.danger,
@@ -189,10 +189,10 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7C4DFF).withOpacity(0.15),
+                          color: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
                           borderRadius: AppTheme.borderRadius,
                           border: Border.all(
-                              color: const Color(0xFF7C4DFF).withOpacity(0.4)),
+                              color: const Color(0xFF7C4DFF).withValues(alpha: 0.4)),
                         ),
                         child: Text('Admin Metric',
                             style: GoogleFonts.inter(
@@ -375,14 +375,14 @@ class _SessionToggleButton extends StatelessWidget {
           height: 90,
           decoration: BoxDecoration(
             borderRadius: AppTheme.borderRadius,
-            color: isActive ? AppTheme.danger.withOpacity(0.12) : AppTheme.emerald.withOpacity(0.12),
+            color: isActive ? AppTheme.danger.withValues(alpha: 0.12) : AppTheme.emerald.withValues(alpha: 0.12),
             border: Border.all(
               color: isActive ? AppTheme.danger : AppTheme.emerald,
               width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: (isActive ? AppTheme.danger : AppTheme.emerald).withOpacity(0.3),
+                color: (isActive ? AppTheme.danger : AppTheme.emerald).withValues(alpha: 0.3),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),

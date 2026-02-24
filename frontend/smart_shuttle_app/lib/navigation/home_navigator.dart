@@ -38,7 +38,7 @@ class HomeNavigator extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppTheme.emerald.withOpacity(0.15),
+                        color: AppTheme.emerald.withValues(alpha: 0.15),
                         borderRadius: AppTheme.borderRadius,
                       ),
                       child: const Icon(Icons.directions_bus_rounded,
@@ -68,9 +68,9 @@ class HomeNavigator extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppTheme.emerald.withOpacity(0.10),
+                    color: AppTheme.emerald.withValues(alpha: 0.10),
                     borderRadius: AppTheme.borderRadius,
-                    border: Border.all(color: AppTheme.emerald.withOpacity(0.3)),
+                    border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.3)),
                   ),
                   child: Text('Integrated System Prototype',
                       style: GoogleFonts.inter(
@@ -158,7 +158,7 @@ class _RoleCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.15),
+              color: accentColor.withValues(alpha: 0.15),
               borderRadius: AppTheme.borderRadius,
             ),
             child: Icon(icon, color: accentColor, size: 26),
@@ -183,7 +183,7 @@ class _RoleCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(memberIds,
                     style: GoogleFonts.inter(
-                      color: accentColor.withOpacity(0.8),
+                      color: accentColor.withValues(alpha: 0.8),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     )),

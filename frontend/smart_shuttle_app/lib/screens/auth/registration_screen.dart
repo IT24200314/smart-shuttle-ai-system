@@ -1,72 +1,58 @@
 // ============================================================
-// Smart Shuttle — Login Screen
-// Initial route for all users. Mock role-based routing.
-// Demo fallback: "Skip for Demo" → RoleSelectionScreen
+// Smart Shuttle — Registration Screen
 // ============================================================
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
-import '../../navigation/home_navigator.dart';
-import '../admin/admin_dashboard_screen.dart';
-import '../driver/driver_dashboard_screen.dart';
-import '../student/student_map_screen.dart';
-import 'registration_screen.dart';
+import 'login_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegistrationScreen extends StatefulWidget {
+  const RegistrationScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailCtrl    = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _formKey      = GlobalKey<FormState>();
+class _RegistrationScreenState extends State<RegistrationScreen> {
+  final _nameCtrl       = TextEditingController();
+  final _emailCtrl      = TextEditingController();
+  final _passwordCtrl   = TextEditingController();
+  final _formKey        = GlobalKey<FormState>();
 
   bool _obscurePassword = true;
   bool _isLoading       = false;
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
 
-  // ── Mock role-based login ───────────────────────────────────
-  void _handleLogin() async {
+  void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // Simulate a network delay
+    // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    final email = _emailCtrl.text.trim().toLowerCase();
-    Widget destination;
-
-    if (email.contains('admin')) {
-      destination = const AdminDashboardScreen();
-    } else if (email.contains('driver')) {
-      destination = const DriverDashboardScreen();
-    } else {
-      destination = const StudentMapScreen();
-    }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => destination),
+    // After registration, go back to login screen with a success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Registration successful! Please login.',
+          style: GoogleFonts.inter(color: Colors.white),
+        ),
+        backgroundColor: AppTheme.emerald,
+      ),
     );
-  }
-
-  // ── Skip for Demo ───────────────────────────────────────────
-  void _skipForDemo() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const HomeNavigator()),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
   }
 
@@ -92,48 +78,61 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Logo & Title ──────────────────────────
-                    Container(
-                      alignment: Alignment.center,
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: AppTheme.emerald.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppTheme.emerald.withValues(alpha: 0.4),
-                            width: 1.5,
+                    // ── Back Button & Title ───────────────────
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          ),
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.textSecondary, size: 20),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Create Account',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.textPrimary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
                           ),
                         ),
-                        child: const Icon(
-                          Icons.directions_bus_rounded,
-                          color: AppTheme.emerald,
-                          size: 40,
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 48),
+                      child: Text(
+                        'Join Smart Shuttle and enjoy seamless journeys.',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Smart Shuttle',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textPrimary,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'AI-Powered University Transport System',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: AppTheme.emerald,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 40),
+
+                    // ── Full Name Field ───────────────────────
+                    const _InputLabel('Full Name'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _nameCtrl,
+                      keyboardType: TextInputType.name,
+                      style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                      decoration: _inputDecoration(
+                        hint: 'e.g. John Doe',
+                        icon: Icons.person_outline_rounded,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Enter your full name';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 18),
 
                     // ── Email Field ───────────────────────────
                     const _InputLabel('Email Address'),
@@ -143,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
                       decoration: _inputDecoration(
-                        hint: 'e.g. admin@shuttle.lk',
+                        hint: 'e.g. student@shuttle.lk',
                         icon: Icons.email_outlined,
                       ),
                       validator: (v) {
@@ -179,17 +178,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: (v) {
                         if (v == null || v.isEmpty) return 'Enter your password';
-                        if (v.length < 4) return 'Password too short';
+                        if (v.length < 6) return 'Password must be at least 6 characters';
                         return null;
                       },
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 32),
 
-                    // ── Login Button ──────────────────────────
+                    // ── Register Button ───────────────────────
                     SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
+                        onPressed: _isLoading ? null : _handleRegister,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.emerald,
                           disabledBackgroundColor: AppTheme.emerald.withValues(alpha: 0.5),
@@ -206,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               )
                             : Text(
-                                'Login',
+                                'Sign Up',
                                 style: GoogleFonts.inter(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -215,47 +214,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-                    // ── Demo Hint ─────────────────────────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        borderRadius: AppTheme.borderRadius,
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Text(
-                        'Hint — Email routing: admin@… → Admin  ·  driver@… → Driver  ·  other → Student',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textSecondary,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    // ── Skip for Demo ─────────────────────────
-                    TextButton(
-                      onPressed: _skipForDemo,
-                      child: Text(
-                        'Skip for Demo  →  Role Selection',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.emerald.withValues(alpha: 0.8),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // ── Registration Link ─────────────────────
+                    // ── Login Link ────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Don\'t have an account? ',
+                          'Already have an account? ',
                           style: GoogleFonts.inter(
                             color: AppTheme.textSecondary,
                             fontSize: 13,
@@ -264,10 +230,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         GestureDetector(
                           onTap: () => Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => const RegistrationScreen()),
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
                           ),
                           child: Text(
-                            'Sign Up',
+                            'Login',
                             style: GoogleFonts.inter(
                               color: AppTheme.emerald,
                               fontSize: 13,

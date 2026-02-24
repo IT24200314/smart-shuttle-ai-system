@@ -70,7 +70,7 @@ class _AlertCardState extends State<AlertCard>
         decoration: BoxDecoration(
           borderRadius: AppTheme.borderRadius,
           color: widget.isActive
-              ? color.withOpacity(0.18)
+              ? color.withValues(alpha: 0.18)
               : AppTheme.glassFill,
           border: Border.all(
             color: widget.isActive ? color : AppTheme.glassBorder,
@@ -79,7 +79,7 @@ class _AlertCardState extends State<AlertCard>
           boxShadow: widget.isActive
               ? [
                   BoxShadow(
-                    color: color.withOpacity(0.45),
+                    color: color.withValues(alpha: 0.45),
                     blurRadius: 24,
                     spreadRadius: 2,
                   )
@@ -92,7 +92,7 @@ class _AlertCardState extends State<AlertCard>
               duration: const Duration(milliseconds: 400),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: widget.isActive ? color.withOpacity(0.25) : Colors.white10,
+                color: widget.isActive ? color.withValues(alpha: 0.25) : Colors.white10,
                 borderRadius: AppTheme.borderRadius,
               ),
               child: Icon(
@@ -119,7 +119,7 @@ class _AlertCardState extends State<AlertCard>
                     widget.isActive ? '⚠ ALERT ACTIVE' : widget.subtitle,
                     style: GoogleFonts.inter(
                       color: widget.isActive
-                          ? color.withOpacity(0.9)
+                          ? color.withValues(alpha: 0.9)
                           : AppTheme.textSecondary,
                       fontSize: 12,
                       fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.w400,
