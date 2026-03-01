@@ -12,7 +12,41 @@ import 'providers/app_state_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // JSON ෆයිල් එක දාපු නිසා දැන් මේක ඉබේම වැඩ කරනවා
+  
+  // Custom Error Widget for the whole app
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 50),
+              const SizedBox(height: 16),
+              const Text('An error occurred during startup!', style: TextStyle(color: Colors.white, fontSize: 18)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    details.exceptionAsString(),
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
+  try {
+    // Try to auto-initialize. It will throw an error if google-services.json is missing on Android.
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase Initialization Warning: $e');
+  }
 
   runApp(
     MultiProvider(

@@ -1,0 +1,13 @@
+train: c:/Users/USER/OneDrive/Documents/suttle project/smart-shuttle-ai-system/ai_models/passenger_counting/dataset/train/images
+val: c:/Users/USER/OneDrive/Documents/suttle project/smart-shuttle-ai-system/ai_models/passenger_counting/dataset/valid/images
+test: c:/Users/USER/OneDrive/Documents/suttle project/smart-shuttle-ai-system/ai_models/passenger_counting/dataset/test/images
+
+nc: 2
+names: ['1', 'person']
+
+roboflow:
+  workspace: passengercount
+  project: passenger_count
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/passengercount/passenger_count/dataset/1
