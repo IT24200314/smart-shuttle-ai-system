@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'providers/app_state_provider.dart';
@@ -42,8 +43,10 @@ void main() async {
   };
 
   try {
-    // Try to auto-initialize. It will throw an error if google-services.json is missing on Android.
-    await Firebase.initializeApp();
+    // Use explicit options for web/android to avoid platform-init mismatches.
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     debugPrint('Firebase Initialization Warning: $e');
   }

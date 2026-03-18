@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/audit_log_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/kpi_card.dart';
@@ -36,8 +37,21 @@ class AdminDashboardScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.history_rounded, color: Colors.blueAccent),
             tooltip: 'View Audit Logs',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AuditLogScreen())),
+            onPressed: () async {
+              await AuditLogService.logEvent(
+                actionType: 'navigate',
+                actionDetails: 'Opened System Audit Logs',
+                moduleName: 'navigation',
+                userId: 'admin',
+                userRole: 'admin',
+              );
+
+              if (!context.mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AuditLogScreen()),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings_rounded, color: Colors.white70),

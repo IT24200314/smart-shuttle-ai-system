@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../navigation/home_navigator.dart';
+import '../../services/audit_log_service.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../driver/driver_dashboard_screen.dart';
 import '../student/student_map_screen.dart';
@@ -46,14 +47,37 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     final email = _emailCtrl.text.trim().toLowerCase();
+    late final String role;
     Widget destination;
 
     if (email.contains('admin')) {
+      role = 'admin';
       destination = const AdminDashboardScreen();
     } else if (email.contains('driver')) {
+      role = 'driver';
       destination = const DriverDashboardScreen();
     } else {
+      role = 'student';
       destination = const StudentMapScreen();
+    }
+
+    final logSaved = await AuditLogService.logLoginEvent(
+      email: email,
+      role: role,
+      success: true,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            logSaved
+                ? 'Login audit record saved to Firebase.'
+                : 'Login completed, but audit log write failed.',
+          ),
+          backgroundColor: logSaved ? Colors.green : Colors.orange,
+        ),
+      );
     }
 
     Navigator.pushReplacement(
@@ -63,7 +87,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ── Skip for Demo ───────────────────────────────────────────
-  void _skipForDemo() {
+  void _skipForDemo() async {
+    await AuditLogService.logEvent(
+      actionType: 'demo_skip',
+      actionDetails: 'User skipped login and opened role selection',
+      moduleName: 'auth',
+      userId: _emailCtrl.text.trim().isEmpty ? 'demo_user' : _emailCtrl.text.trim().toLowerCase(),
+      userRole: 'demo',
+    );
+
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const HomeNavigator()),
