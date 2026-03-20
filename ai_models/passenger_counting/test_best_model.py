@@ -27,16 +27,21 @@ def main():
     model = YOLO(model_path)
 
     print("🎥 Starting Passenger Counting & Revenue Engine... (Press 'q' to stop)")
-    cap = cv2.VideoCapture(0)
+    # Using cv2.CAP_DSHOW provides faster and more reliable camera access on Windows
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+    if not cap.isOpened():
+        print("❌ Error: Could not open the webcam. Please make sure it's not being used by another app.")
+        return
 
     last_count = -1  # Variable used to check if the passenger count has changed
 
     # 4. AI Inference Loop
-    # Instead of a stream, let's use a while loop to get frame by frame and send it to the AI (due to the previous GUI issue)
+    print("⏳ Waiting for the first frame (the AI might take a few seconds to warm up)...")
     while cap.isOpened():
         success, frame = cap.read()
         if not success:
-            print("❌ Cannot get images from the camera!")
+            print("❌ Cannot get images from the camera! It might be disconnected or used by another app.")
             break
 
         results = model.predict(source=frame, conf=0.25, verbose=False)
