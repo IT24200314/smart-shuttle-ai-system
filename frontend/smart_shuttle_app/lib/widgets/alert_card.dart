@@ -1,7 +1,6 @@
 // ============================================================
-// Smart Shuttle — Alert Card Widget
-// Pulsing safety alert card for Driver View
-// Includes glow animation when active
+// Smart Shuttle — Alert Card Widget (Redesigned)
+// Cleaner severity styling, left-border when active
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -33,16 +32,16 @@ class AlertCard extends StatefulWidget {
 class _AlertCardState extends State<AlertCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
+  late Animation<double> _opacityAnim;
 
   @override
   void initState() {
     super.initState();
     _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.06).animate(
+    _opacityAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
   }
@@ -56,86 +55,116 @@ class _AlertCardState extends State<AlertCard>
   @override
   Widget build(BuildContext context) {
     final color = widget.alertColor;
-    return AnimatedBuilder(
-      animation: _pulseAnim,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: widget.isActive ? _pulseAnim.value : 1.0,
-          child: child,
-        );
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: AppTheme.borderRadius,
-          color: widget.isActive
-              ? color.withValues(alpha: 0.18)
-              : AppTheme.glassFill,
-          border: Border.all(
-            color: widget.isActive ? color : AppTheme.glassBorder,
-            width: widget.isActive ? 2 : 1,
-          ),
-          boxShadow: widget.isActive
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.45),
-                    blurRadius: 24,
-                    spreadRadius: 2,
-                  )
-                ]
-              : [],
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      decoration: BoxDecoration(
+        borderRadius: AppTheme.cardRadius,
+        color: widget.isActive
+            ? color.withValues(alpha: 0.10)
+            : AppTheme.surface,
+        border: Border.all(
+          color: widget.isActive ? color.withValues(alpha: 0.6) : AppTheme.border,
+          width: 1,
         ),
+        boxShadow: widget.isActive
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.20),
+                  blurRadius: 18,
+                  spreadRadius: 0,
+                )
+              ]
+            : [],
+      ),
+      child: ClipRRect(
+        borderRadius: AppTheme.cardRadius,
         child: Row(
           children: [
+            // Severity left border
             AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: widget.isActive ? color.withValues(alpha: 0.25) : Colors.white10,
-                borderRadius: AppTheme.borderRadius,
+              duration: const Duration(milliseconds: 350),
+              width: 4,
+              height: 80,
+              color: widget.isActive ? color : AppTheme.borderStrong,
+            ),
+            const SizedBox(width: 14),
+            // Icon
+            AnimatedBuilder(
+              animation: _opacityAnim,
+              builder: (_, child) => Opacity(
+                opacity: widget.isActive ? _opacityAnim.value : 1.0,
+                child: child,
               ),
-              child: Icon(
-                widget.icon,
-                color: widget.isActive ? color : AppTheme.textSecondary,
-                size: 28,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: widget.isActive
+                      ? color.withValues(alpha: 0.18)
+                      : AppTheme.surfaceHigh,
+                  borderRadius: AppTheme.chipRadius,
+                ),
+                child: Icon(
+                  widget.icon,
+                  color: widget.isActive ? color : AppTheme.textMuted,
+                  size: 24,
+                ),
               ),
             ),
             const SizedBox(width: 14),
+            // Text
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.title,
-                    style: GoogleFonts.inter(
-                      color: widget.isActive ? color : AppTheme.textSecondary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: GoogleFonts.inter(
+                        color: widget.isActive ? color : AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    widget.isActive ? '⚠ ALERT ACTIVE' : widget.subtitle,
-                    style: GoogleFonts.inter(
-                      color: widget.isActive
-                          ? color.withValues(alpha: 0.9)
-                          : AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.w400,
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.isActive ? 'ALERT ACTIVE — AI detected event' : widget.subtitle,
+                      style: GoogleFonts.inter(
+                        color: widget.isActive
+                            ? color.withValues(alpha: 0.85)
+                            : AppTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.w400,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
+            // Simulate / Clear button
             if (widget.onSimulate != null)
-              TextButton(
-                onPressed: widget.onSimulate,
-                child: Text(
-                  widget.isActive ? 'Clear' : 'Simulate',
-                  style: GoogleFonts.inter(
-                    color: widget.isActive ? color : AppTheme.textSecondary,
-                    fontSize: 12,
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: TextButton(
+                  onPressed: widget.onSimulate,
+                  style: TextButton.styleFrom(
+                    backgroundColor: widget.isActive
+                        ? color.withValues(alpha: 0.15)
+                        : AppTheme.surfaceHigh,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppTheme.chipRadius,
+                    ),
+                  ),
+                  child: Text(
+                    widget.isActive ? 'Clear' : 'Test',
+                    style: GoogleFonts.inter(
+                      color: widget.isActive ? color : AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

@@ -1,7 +1,6 @@
 // ============================================================
-// Smart Shuttle — Login Screen
-// Initial route for all users. Mock role-based routing.
-// Demo fallback: "Skip for Demo" → RoleSelectionScreen
+// Smart Shuttle — Login Screen (Redesigned)
+// Clean dark canvas, indigo primary button, semantic colors
 // ============================================================
 
 import 'package:flutter/material.dart';
@@ -35,12 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ── Mock role-based login ───────────────────────────────────
   void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
-    // Simulate a network delay
     await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -62,7 +58,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Skip for Demo ───────────────────────────────────────────
   void _skipForDemo() {
     Navigator.pushReplacement(
       context,
@@ -73,212 +68,206 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.darkBlue,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppTheme.darkBlue, AppTheme.deepBlue, Color(0xFF1B3A6B)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ── Logo & Title ──────────────────────────
-                    Container(
-                      alignment: Alignment.center,
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: AppTheme.emerald.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppTheme.emerald.withValues(alpha: 0.4),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.directions_bus_rounded,
-                          color: AppTheme.emerald,
-                          size: 40,
+      backgroundColor: AppTheme.background,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── App Logo ──────────────────────────────────
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.accent.withValues(alpha: 0.35),
+                          width: 1.5,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Smart Shuttle',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textPrimary,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
+                      child: const Icon(
+                        Icons.directions_bus_rounded,
+                        color: AppTheme.accent,
+                        size: 44,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'AI-Powered University Transport System',
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Titles ────────────────────────────────────
+                  Text(
+                    'Smart Shuttle',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'AI-Powered University Transport',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 44),
+
+                  // ── Email ─────────────────────────────────────
+                  _Label('Email Address'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                    decoration: _inputDeco(
+                      hint: 'e.g. admin@shuttle.lk',
+                      icon: Icons.email_outlined,
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Enter your email';
+                      if (!v.contains('@')) return 'Enter a valid email';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Password ──────────────────────────────────
+                  _Label('Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _passwordCtrl,
+                    obscureText: _obscurePassword,
+                    style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                    decoration: _inputDeco(
+                      hint: '••••••••',
+                      icon: Icons.lock_outline_rounded,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppTheme.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Enter your password';
+                      if (v.length < 4) return 'Password too short';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+
+                  // ── Login Button ──────────────────────────────
+                  SizedBox(
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppTheme.cardRadius,
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Sign In',
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Demo hint ─────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceHigh,
+                      borderRadius: AppTheme.chipRadius,
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Text(
+                      'Demo: admin@…  ·  driver@…  ·  other → Student',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        color: AppTheme.emerald,
-                        fontSize: 12,
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── Skip ──────────────────────────────────────
+                  TextButton(
+                    onPressed: _skipForDemo,
+                    child: Text(
+                      'Skip — Role Selection Demo',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.accent.withValues(alpha: 0.8),
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 40),
+                  ),
+                  const SizedBox(height: 12),
 
-                    // ── Email Field ───────────────────────────
-                    const _InputLabel('Email Address'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
-                      decoration: _inputDecoration(
-                        hint: 'e.g. admin@shuttle.lk',
-                        icon: Icons.email_outlined,
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Enter your email';
-                        if (!v.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 18),
-
-                    // ── Password Field ────────────────────────
-                    const _InputLabel('Password'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscurePassword,
-                      style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
-                      decoration: _inputDecoration(
-                        hint: '••••••••',
-                        icon: Icons.lock_outline_rounded,
-                      ).copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppTheme.textSecondary,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter your password';
-                        if (v.length < 4) return 'Password too short';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 28),
-
-                    // ── Login Button ──────────────────────────
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.emerald,
-                          disabledBackgroundColor: AppTheme.emerald.withValues(alpha: 0.5),
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: AppTheme.borderRadius,
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 22, height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                'Login',
-                                style: GoogleFonts.inter(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // ── Demo Hint ─────────────────────────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        borderRadius: AppTheme.borderRadius,
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Text(
-                        'Hint — Email routing: admin@… → Admin  ·  driver@… → Driver  ·  other → Student',
-                        textAlign: TextAlign.center,
+                  // ── Register link ─────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account? ",
                         style: GoogleFonts.inter(
                           color: AppTheme.textSecondary,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    // ── Skip for Demo ─────────────────────────
-                    TextButton(
-                      onPressed: _skipForDemo,
-                      child: Text(
-                        'Skip for Demo  →  Role Selection',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.emerald.withValues(alpha: 0.8),
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // ── Registration Link ─────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Don\'t have an account? ',
+                      GestureDetector(
+                        onTap: () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RegistrationScreen()),
+                        ),
+                        child: Text(
+                          'Sign Up',
                           style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
+                            color: AppTheme.accent,
                             fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RegistrationScreen()),
-                          ),
-                          child: Text(
-                            'Sign Up',
-                            style: GoogleFonts.inter(
-                              color: AppTheme.emerald,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -287,48 +276,45 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  InputDecoration _inputDecoration({
-    required String hint,
-    required IconData icon,
-  }) {
+  InputDecoration _inputDeco({required String hint, required IconData icon}) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
-      prefixIcon: Icon(icon, color: AppTheme.textSecondary, size: 20),
+      hintStyle: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 13),
+      prefixIcon: Icon(icon, color: AppTheme.textMuted, size: 20),
       filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.06),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: const OutlineInputBorder(
-        borderRadius: AppTheme.borderRadius,
-        borderSide: BorderSide(color: AppTheme.glassBorder),
+      fillColor: AppTheme.surfaceHigh,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      border: OutlineInputBorder(
+        borderRadius: AppTheme.inputRadius,
+        borderSide: const BorderSide(color: AppTheme.border),
       ),
-      enabledBorder: const OutlineInputBorder(
-        borderRadius: AppTheme.borderRadius,
-        borderSide: BorderSide(color: AppTheme.glassBorder),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: AppTheme.inputRadius,
+        borderSide: const BorderSide(color: AppTheme.border),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: AppTheme.borderRadius,
-        borderSide: BorderSide(color: AppTheme.emerald, width: 1.5),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: AppTheme.inputRadius,
+        borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
       ),
-      errorBorder: const OutlineInputBorder(
-        borderRadius: AppTheme.borderRadius,
-        borderSide: BorderSide(color: AppTheme.danger),
+      errorBorder: OutlineInputBorder(
+        borderRadius: AppTheme.inputRadius,
+        borderSide: const BorderSide(color: AppTheme.danger),
       ),
       errorStyle: GoogleFonts.inter(color: AppTheme.danger, fontSize: 11),
     );
   }
 }
 
-class _InputLabel extends StatelessWidget {
+class _Label extends StatelessWidget {
   final String text;
-  const _InputLabel(this.text);
+  const _Label(this.text);
   @override
   Widget build(BuildContext context) => Text(
-    text,
-    style: GoogleFonts.inter(
-      color: AppTheme.textSecondary,
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-    ),
-  );
+        text,
+        style: GoogleFonts.inter(
+          color: AppTheme.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      );
 }

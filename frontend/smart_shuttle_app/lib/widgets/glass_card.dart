@@ -1,10 +1,9 @@
 // ============================================================
-// Smart Shuttle — Glassmorphism Card Widget
-// Reusable card with BackdropFilter blur, frosted gradient,
-// and 8px BorderRadius (Rubric: Design Consistency)
+// Smart Shuttle — App Card Widget (Redesigned GlassCard)
+// Clean surface card with subtle border, 14px radius
+// Kept as GlassCard for backward compatibility
 // ============================================================
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -15,7 +14,7 @@ class GlassCard extends StatelessWidget {
   final double? height;
   final Color? borderColor;
   final Color? fillColor;
-  final double blurSigma;
+  final double blurSigma; // kept for API compat, unused
   final BorderRadius? borderRadius;
   final VoidCallback? onTap;
 
@@ -27,44 +26,36 @@ class GlassCard extends StatelessWidget {
     this.height,
     this.borderColor,
     this.fillColor,
-    this.blurSigma = 10.0,
+    this.blurSigma = 0,
     this.borderRadius,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final br = borderRadius ?? AppTheme.borderRadius;
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
+    final br = borderRadius ?? AppTheme.cardRadius;
+    final fill = fillColor ?? AppTheme.surface;
+    final bc = borderColor ?? AppTheme.border;
+
+    final card = Container(
+      width: width,
+      height: height,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: fill,
         borderRadius: br,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-          child: Container(
-            width: width,
-            height: height,
-            padding: padding ?? const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: fillColor ?? AppTheme.glassFill,
-              borderRadius: br,
-              border: Border.all(
-                color: borderColor ?? AppTheme.glassBorder,
-                width: 1,
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.10),
-                  Colors.white.withValues(alpha: 0.04),
-                ],
-              ),
-            ),
-            child: child,
-          ),
-        ),
+        border: Border.all(color: bc, width: 1),
       ),
+      child: child,
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: br,
+        child: card,
+      );
+    }
+    return card;
   }
 }
