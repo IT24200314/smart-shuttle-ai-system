@@ -7,9 +7,10 @@ import random
 import uuid
 
 # Initialize Firebase Admin securely
-key_path = os.path.join(os.path.dirname(__file__), 'serviceAccountKey.json')
+key_path = r"C:\suttle project\smart-shuttle-ai-system\backend\database\serviceAccountKey.json"
 if not os.path.exists(key_path):
-    key_path = r'c:\suttle project\smart-shuttle-ai-system\ai_models\passenger_counting\serviceAccountKey.json'
+    print(f"❌ Could not find {key_path}")
+    exit(1)
 
 cred = credentials.Certificate(key_path)
 if not firebase_admin._apps:

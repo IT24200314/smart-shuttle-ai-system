@@ -17,7 +17,7 @@ from datetime import datetime
 # =====================================================================
 
 class RevenueEngine:
-    def __init__(self, key_path="serviceAccountKey.json"):
+    def __init__(self, key_path=r"C:\suttle project\smart-shuttle-ai-system\backend\database\serviceAccountKey.json"):
         """Initializes the connection to Firebase."""
         if not firebase_admin._apps:
             try:
@@ -26,7 +26,7 @@ class RevenueEngine:
                 print("✅ Revenue Engine: Connected to Firebase.")
             except Exception as e:
                 print(f"❌ Failed to connect to Firebase: {e}")
-                print("Ensure you have downloaded 'serviceAccountKey.json' from Firebase Console -> Service Accounts.")
+                print(f"Ensure you have 'serviceAccountKey.json' at {key_path}")
                 exit(1)
         self.db = firestore.client()
         # In-memory cache for ticket prices to reduce database reads
