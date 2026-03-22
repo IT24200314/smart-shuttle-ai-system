@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/kpi_card.dart';
 import 'revenue_dashboard_screen.dart';
+import 'admin_lost_found_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../utils/api_config.dart';
@@ -94,22 +95,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 16),
-                child: TextButton.icon(
-                  icon: const Icon(Icons.bar_chart_rounded,
-                      color: AppTheme.positive, size: 15),
-                  label: Text('Revenue',
-                      style: GoogleFonts.inter(
-                          color: AppTheme.positive,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)),
-                  style: TextButton.styleFrom(
-                    backgroundColor: AppTheme.positive.withOpacity(0.10),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: AppTheme.chipRadius),
-                  ),
-                  onPressed: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const RevenueDashboardScreen())),
+                child: Row(
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.search_rounded,
+                          color: AppTheme.accent, size: 15),
+                      label: Text('Lost & Found',
+                          style: GoogleFonts.inter(
+                              color: AppTheme.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppTheme.accent.withOpacity(0.10),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: AppTheme.chipRadius),
+                      ),
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const AdminLostFoundScreen())),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.bar_chart_rounded,
+                          color: AppTheme.positive, size: 15),
+                      label: Text('Revenue',
+                          style: GoogleFonts.inter(
+                              color: AppTheme.positive,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppTheme.positive.withOpacity(0.10),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: AppTheme.chipRadius),
+                      ),
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const RevenueDashboardScreen())),
+                    ),
+                  ],
                 ),
               ),
             ],

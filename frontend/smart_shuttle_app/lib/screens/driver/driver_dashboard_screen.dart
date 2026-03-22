@@ -136,6 +136,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
   Future<Map<String, int>?> _showEndDialog() async {
     final c75 = TextEditingController(text: '0');
     final c100 = TextEditingController(text: '0');
+    final c150 = TextEditingController(text: '0');
+    final c200 = TextEditingController(text: '0');
     return showDialog<Map<String, int>>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -146,6 +148,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           children: [
             _TicketField(label: '75 LKR Tickets', controller: c75),
             _TicketField(label: '100 LKR Tickets', controller: c100),
+            _TicketField(label: '150 LKR Tickets', controller: c150),
+            _TicketField(label: '200 LKR Tickets', controller: c200),
           ],
         ),
         actions: [
@@ -154,7 +158,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
             onPressed: () => Navigator.pop(ctx, {
               '75': int.tryParse(c75.text) ?? 0,
               '100': int.tryParse(c100.text) ?? 0,
-              '150': 0, '200': 0
+              '150': int.tryParse(c150.text) ?? 0,
+              '200': int.tryParse(c200.text) ?? 0,
             }),
             child: const Text('Submit')
           ),

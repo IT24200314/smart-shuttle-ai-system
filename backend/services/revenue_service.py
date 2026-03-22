@@ -1,5 +1,5 @@
 from utils.firebase_config import db
-from models.schemas import DashboardSummaryResponse, RevenueSummaryData, RecentTripItem, TripLedgerItem, BestWorstTrip, AIRecommendation, YieldAlert
+from models.schemas import DashboardSummaryResponse, RevenueSummaryData, RecentTripItem, BestWorstTrip, AIRecommendation, YieldAlert
 from datetime import datetime
 
 class RevenueService:
@@ -12,95 +12,142 @@ class RevenueService:
         revenue_today = 0.0
         profit_today = 0.0
         leakage_today = 0.0
-        trips_completed = 0
-        total_ai_count = 0
-        total_tickets = 0
-        total_unpaid = 0
+        trips_today = 0
+        total_ai_passengers = 0
+        total_tickets_sold = 0
+        total_unpaid_or_leaked = 0
 
+        recent_trips = []
+        recent_evening_trips = []
+
+        best_profit = -float('inf')
+        worst_profit = float('inf')
         best_trip = None
         worst_trip = None
-        recent_evening_trips = []
-        recent_ledger = []
 
         for doc in docs:
             data = doc.to_dict()
             date = data.get('date', '')
-            rev = float(data.get('actualRevenue', 0))
-            prf = float(data.get('profitOrLoss', 0))
-            lk = float(data.get('revenueLeakage', 0))
+            trip_type = data.get('tripType', '').upper()
+            ai_passengers = int(data.get('aiPassengerCount', 0))
+            tickets_sold = int(data.get('soldTicketCount', 0))
             
-            ai_count = int(data.get('aiPassengerCount', 0))
-            tkt_count = int(data.get('soldTicketCount', 0))
-            unpd = int(data.get('unpaidPassengerCount', 0))
-
+            unpaid_or_leaked = max(ai_passengers - tickets_sold, 0)
+            
+            actual_revenue = float(data.get('actualRevenue', 0))
+            operating_cost = 4000.0  # Fixed based on constraints
+            profit_or_loss = actual_revenue - operating_cost
+            
             # Today's Math
             if date == today_str:
-                revenue_today += rev
-                profit_today += prf
-                leakage_today += lk
-                trips_completed += 1
+                revenue_today += actual_revenue
+                profit_today += profit_or_loss
+                trips_today += 1
+                
+                # Daily leakage sum
+                avg_rev_per_ticket = actual_revenue / tickets_sold if tickets_sold > 0 else 75
+                leakage_today += (unpaid_or_leaked * avg_rev_per_ticket)
 
-            total_ai_count += ai_count
-            total_tickets += tkt_count
-            total_unpaid += unpd
+            total_ai_passengers += ai_passengers
+            total_tickets_sold += tickets_sold
+            total_unpaid_or_leaked += unpaid_or_leaked
 
-            # Best Worst
-            if best_trip is None or prf > best_trip['profitOrLoss']:
-                best_trip = {'tripType': data.get('tripType', ''), 'profitOrLoss': prf}
-            if worst_trip is None or prf < worst_trip['profitOrLoss']:
-                worst_trip = {'tripType': data.get('tripType', ''), 'profitOrLoss': prf}
+            # Identify Best / Worst
+            if profit_or_loss > best_profit:
+                best_profit = profit_or_loss
+                best_trip = BestWorstTrip(
+                    trip_type=trip_type,
+                    profit_or_loss=profit_or_loss,
+                    label="+" + str(int(profit_or_loss)) if profit_or_loss >= 0 else str(int(profit_or_loss))
+                )
+            if profit_or_loss < worst_profit:
+                worst_profit = profit_or_loss
+                worst_trip = BestWorstTrip(
+                    trip_type=trip_type,
+                    profit_or_loss=profit_or_loss,
+                    label="+" + str(int(profit_or_loss)) if profit_or_loss >= 0 else str(int(profit_or_loss))
+                )
 
             # Evening Alert Tracking
-            if data.get('tripType') == 'evening' and len(recent_evening_trips) < 5:
-                recent_evening_trips.append(data)
+            if trip_type == 'EVENING' and len(recent_evening_trips) < 5:
+                recent_evening_trips.append({'revenue': actual_revenue, 'loss': profit_or_loss})
 
-            # Ledger
-            recent_ledger.append(TripLedgerItem(
+            # Assemble Recent Trip List
+            is_warning = profit_or_loss < 0 or unpaid_or_leaked > 5
+            
+            recent_trips.append(RecentTripItem(
                 date=date,
-                tripType=data.get('tripType', '').upper(),
-                aiCount=ai_count,
-                ticketsSold=tkt_count,
-                profitOrLoss=prf,
-                isProfit=prf >= 0
+                trip_type=trip_type,
+                ai_passengers=ai_passengers,
+                tickets_sold=tickets_sold,
+                unpaid_or_leaked=unpaid_or_leaked,
+                actual_revenue=actual_revenue,
+                operating_cost=operating_cost,
+                profit_or_loss=profit_or_loss,
+                is_profit=profit_or_loss >= 0,
+                is_warning=is_warning
             ))
 
-        # Yield Alert Logic
-        evening_losses = 0
-        sum_evening_rev = 0
-        sum_evening_loss = 0
-        for t in recent_evening_trips:
-            p = float(t.get('profitOrLoss', 0))
-            if p < 0: evening_losses += 1
-            sum_evening_rev += float(t.get('actualRevenue', 0))
-            sum_evening_loss += p
-
+        # Alert Logic calculations
+        evening_losses = [t for t in recent_evening_trips if t['loss'] < 0]
         evening_len = len(recent_evening_trips)
-        avg_rev = sum_evening_rev / evening_len if evening_len > 0 else 0
-        avg_loss = sum_evening_loss / evening_len if evening_len > 0 else 0
         
-        # Recommendations
+        sum_evening_rev = sum(t['revenue'] for t in recent_evening_trips)
+        sum_evening_loss = sum(t['loss'] for t in recent_evening_trips)
+        
+        avg_evening_rev = sum_evening_rev / evening_len if evening_len > 0 else 0
+        avg_evening_loss = sum_evening_loss / evening_len if evening_len > 0 else 0
+
+        # AI Recommendations
+        is_evening_critical = len(evening_losses) >= 3 or avg_evening_loss < -1000
+        
+        reasons = []
+        if len(evening_losses) >= 3:
+            reasons.append(f"{len(evening_losses)} consecutive evening losses detected")
+        if avg_evening_loss < -1000:
+            reasons.append("Average evening losses exceed acceptable threshold")
+        if not reasons:
+            reasons.append("Demand appears stable across both time blocks")
+            
         rec = AIRecommendation(
-            morning_action="✅ Keep running",
-            evening_action="❌ Cancel temp." if evening_losses >= 3 else "⚠️ Monitor",
-            reason=["5 consecutive losses", "Avg passengers below threshold"] if evening_losses >= 3 else []
+            morning_action="Keep running",
+            evening_action="Cancel temp. / Review" if is_evening_critical else "Monitor closely",
+            confidence="High" if evening_len >= 3 else "Medium",
+            reason_points=reasons
         )
 
-        overall_leakage = (total_unpaid / total_ai_count * 100) if total_ai_count > 0 else 0
+        # Low Demand Alert
+        alert = None
+        if is_evening_critical:
+            alert = YieldAlert(
+                title="Low Demand Alert",
+                last_n_evening_trips=evening_len,
+                avg_revenue=avg_evening_rev,
+                fixed_cost=4000.0,
+                avg_loss=avg_evening_loss,
+                recommendation="Consider cancelling evening trips temporarily",
+                severity="HIGH" if len(evening_losses) >= 4 else "MEDIUM"
+            )
+
+        # Totals
+        overall_leakage_rate = (total_unpaid_or_leaked / total_ai_passengers * 100) if total_ai_passengers > 0 else 0.0
+        ticket_leakage_percent = (total_unpaid_or_leaked / total_ai_passengers * 100) if total_ai_passengers > 0 else 0.0
 
         return DashboardSummaryResponse(
-            summary=RevenueSummaryData(
-                total_revenue=revenue_today,
-                revenue_growth=5.2,
-                forecast_30d=145.0,
-                leakage_percent=overall_leakage,
-                leakage_amount=leakage_today
+            summary_data=RevenueSummaryData(
+                revenue_today=revenue_today,
+                net_profit_today=profit_today,
+                ticket_leakage_amount=leakage_today,
+                ticket_leakage_percent=ticket_leakage_percent,
+                trips_done_today=trips_today,
+                total_ai_passengers=total_ai_passengers,
+                total_tickets_sold=total_tickets_sold,
+                total_unpaid_or_leaked=total_unpaid_or_leaked,
+                overall_leakage_rate=overall_leakage_rate
             ),
-            recent_trips=[
-                RecentTripItem(
-                    trip_id=f"T-{i+1:03d}",
-                    route_id=item.tripType.capitalize(),
-                    passenger_count=item.aiCount,
-                    revenue=item.profitOrLoss + 2000.0 # Just a display value based on profit
-                ) for i, item in enumerate(recent_ledger[:10])
-            ]
+            ai_recommendation=rec,
+            low_demand_alert=alert,
+            best_trip=best_trip,
+            worst_trip=worst_trip,
+            recent_trips=recent_trips[:15] # Send only the latest 15 to keep UI render fast
         )

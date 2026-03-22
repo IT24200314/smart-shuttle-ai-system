@@ -10,6 +10,7 @@ import '../../providers/app_state_provider.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/crowd_density_badge.dart';
 import '../../utils/api_config.dart';
+import 'student_lost_found_screen.dart';
 
 class StudentMapScreen extends StatefulWidget {
   const StudentMapScreen({super.key});
@@ -140,6 +141,24 @@ class _StudentMapScreenState extends State<StudentMapScreen>
           ],
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: TextButton.icon(
+              icon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 14),
+              label: Text('Lost & Found',
+                  style: GoogleFonts.inter(
+                      color: AppTheme.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+              style: TextButton.styleFrom(
+                backgroundColor: AppTheme.accent.withOpacity(0.10),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+              ),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const StudentLostFoundScreen())),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded,
                 color: AppTheme.textSecondary, size: 20),
@@ -506,9 +525,8 @@ class _BottomSheet extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
 
-                  // Crowd Card — Fixed width, not Expanded, so it can't overflow ETA
-                  SizedBox(
-                    width: 130,
+                  // Crowd Card — Responsive width, expanded
+                  Expanded(
                     child: GlassCard(
                       padding: const EdgeInsets.all(14),
                       child: Column(
@@ -524,8 +542,9 @@ class _BottomSheet extends StatelessWidget {
                           CrowdDensityBadge(density: provider.crowdDensity),
                           const SizedBox(height: 10),
                           // Crowd selector buttons
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
                             children: CrowdDensity.values.map((d) {
                               final selected = provider.crowdDensity == d;
                               return GestureDetector(
