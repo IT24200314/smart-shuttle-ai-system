@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import 'login_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../utils/api_config.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -23,6 +26,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   bool _obscurePassword = true;
   bool _isLoading       = false;
+  
+  String _selectedRole = 'student'; // Defaults to student
 
   @override
   void dispose() {
@@ -35,25 +40,59 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+    
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim().toLowerCase();
+    final password = _passwordCtrl.text;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Account created! Please log in.',
-          style: GoogleFonts.inter(color: Colors.white),
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'password': password,
+          'role': _selectedRole,
+          'name': name
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Account created! Please log in.', style: GoogleFonts.inter(color: Colors.white)),
+            backgroundColor: AppTheme.positive,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+          ),
+        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      } else {
+        final err = Map<String, dynamic>.from(json.decode(res.body))['detail'] ?? 'Registration failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err, style: GoogleFonts.inter(color: Colors.white)),
+            backgroundColor: AppTheme.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('API Offline: Start Python Server', style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: AppTheme.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
         ),
-        backgroundColor: AppTheme.positive,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
-      ),
-    );
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+      );
+    }
   }
 
   @override
@@ -149,6 +188,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // ── Role Selection ────────────────────────────
+                _Label('Select Your Account Type'),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _selectedRole,
+                  dropdownColor: AppTheme.surfaceHigh,
+                  style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                  decoration: _inputDeco(hint: '', icon: Icons.badge_outlined),
+                  items: const [
+                    DropdownMenuItem(value: 'student', child: Text('Student Route User')),
+                    DropdownMenuItem(value: 'driver', child: Text('Shuttle Driver')),
+                    DropdownMenuItem(value: 'admin', child: Text('Network Admin')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedRole = v);
+                  },
+                ),
+                const SizedBox(height: 20),
+
                 // ── Password ──────────────────────────────────
                 _Label('Password'),
                 const SizedBox(height: 8),
@@ -187,7 +245,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     onPressed: _isLoading ? null : _handleRegister,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
-                      disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.4),
+                      disabledBackgroundColor: AppTheme.accent.withOpacity(0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: AppTheme.cardRadius,
                       ),

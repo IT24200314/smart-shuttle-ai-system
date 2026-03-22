@@ -1,16 +1,15 @@
-// ============================================================
-// Smart Shuttle — Student Map Screen (Overflow-fixed)
-// Bottom sheet: Expanded ETA card, crowd card fixed-width
-// ============================================================
-
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import '../../theme/app_theme.dart';
 import '../../providers/app_state_provider.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/crowd_density_badge.dart';
+import '../../utils/api_config.dart';
 
 class StudentMapScreen extends StatefulWidget {
   const StudentMapScreen({super.key});
@@ -21,10 +20,15 @@ class StudentMapScreen extends StatefulWidget {
 
 class _StudentMapScreenState extends State<StudentMapScreen>
     with TickerProviderStateMixin {
-  late AnimationController _busCtrl;
   late AnimationController _pulseCtrl;
-  late Animation<double> _busAnim;
   late Animation<double> _pulseAnim;
+  Timer? _pollTimer;
+
+  Offset _busPos = const Offset(0.10, 0.70); // Default to start
+  String _busId = 'NB-2341';
+  int _currentSpeed = 0;
+  int _freeSeats = 15;
+  String _stopStatus = 'En route';
 
   String _selectedRoute = 'Route A — Main Gate';
   final List<String> _routes = [
@@ -45,23 +49,55 @@ class _StudentMapScreenState extends State<StudentMapScreen>
   @override
   void initState() {
     super.initState();
-    _busCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat();
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _busAnim = CurvedAnimation(parent: _busCtrl, curve: Curves.linear);
     _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _fetchLiveLocation(); // initial
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (t) => _fetchLiveLocation());
+  }
+
+  Future<void> _fetchLiveLocation() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/map/live-location'),
+      ).timeout(const Duration(seconds: 2));
+
+      if (res.statusCode == 200 && mounted) {
+        final data = Map<String, dynamic>.from(json.decode(res.body));
+        setState(() {
+          _busPos = Offset(
+            (data['lat_percent'] ?? 0.5).toDouble(),
+            (data['lng_percent'] ?? 0.5).toDouble(),
+          );
+          _busId = data['bus_id'] ?? 'NB-2341';
+          _currentSpeed = data['speed'] ?? 0;
+          _freeSeats = data['available_seats'] ?? 0;
+          _stopStatus = data['status'] ?? 'Active';
+          
+          // Sync ETA if provided by backend
+          if (data['eta_min'] != null) {
+            context.read<AppStateProvider>().setEta(data['eta_min']);
+          }
+        });
+      }
+    } catch (_) {
+      // Fail silently for polling
+    }
   }
 
   @override
   void dispose() {
-    _busCtrl.dispose();
+    _pollTimer?.cancel();
     _pulseCtrl.dispose();
     super.dispose();
   }
@@ -147,17 +183,11 @@ class _StudentMapScreenState extends State<StudentMapScreen>
             ),
           ),
 
-          // ── Animated Bus Marker ─────────────────────────────
-          AnimatedBuilder(
-            animation: _busAnim,
-            builder: (context, _) {
-              final pos = _busPosition(_busAnim.value);
-              return Positioned(
-                left: (pos.dx * size.width - 20).clamp(0.0, size.width - 44),
-                top: (pos.dy * mapH).clamp(0.0, mapH - 44),
-                child: _BusMarker(pulseAnim: _pulseAnim),
-              );
-            },
+          // ── Real-time Bus Marker ───────────────────────────
+          Positioned(
+            left: (_busPos.dx * size.width - 20).clamp(0.0, size.width - 44),
+            top: (_busPos.dy * mapH).clamp(0.0, mapH - 44),
+            child: _BusMarker(pulseAnim: _pulseAnim),
           ),
 
           // ── Bottom Info Sheet ───────────────────────────────
@@ -168,6 +198,10 @@ class _StudentMapScreenState extends State<StudentMapScreen>
               selectedRoute: _selectedRoute,
               routes: _routes,
               onRouteChanged: (r) => setState(() => _selectedRoute = r!),
+              busId: _busId,
+              currentSpeed: _currentSpeed,
+              freeSeats: _freeSeats,
+              stopStatus: _stopStatus,
             ),
           ),
         ],
@@ -239,7 +273,7 @@ class _RoutePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppTheme.positive.withValues(alpha: 0.9)
+      ..color = AppTheme.positive.withOpacity(0.9)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -288,7 +322,7 @@ class _BusMarker extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppTheme.positive
-                    .withValues(alpha: 0.12 * pulseAnim.value),
+                    .withOpacity(0.12 * pulseAnim.value),
               ),
             ),
             Container(
@@ -298,7 +332,7 @@ class _BusMarker extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.positive.withValues(alpha: 0.40),
+                    color: AppTheme.positive.withOpacity(0.40),
                     blurRadius: 10,
                     spreadRadius: 1,
                   ),
@@ -320,12 +354,20 @@ class _BottomSheet extends StatelessWidget {
   final String selectedRoute;
   final List<String> routes;
   final ValueChanged<String?> onRouteChanged;
+  final String busId;
+  final int currentSpeed;
+  final int freeSeats;
+  final String stopStatus;
 
   const _BottomSheet({
     required this.provider,
     required this.selectedRoute,
     required this.routes,
     required this.onRouteChanged,
+    required this.busId,
+    required this.currentSpeed,
+    required this.freeSeats,
+    required this.stopStatus,
   });
 
   @override
@@ -497,13 +539,13 @@ class _BottomSheet extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: selected
                                         ? AppTheme.positive
-                                            .withValues(alpha: 0.18)
+                                            .withOpacity(0.18)
                                         : AppTheme.surfaceHigh,
                                     borderRadius: AppTheme.chipRadius,
                                     border: Border.all(
                                       color: selected
                                           ? AppTheme.positive
-                                              .withValues(alpha: 0.6)
+                                              .withOpacity(0.6)
                                           : AppTheme.border,
                                     ),
                                   ),
@@ -536,18 +578,18 @@ class _BottomSheet extends StatelessWidget {
                     horizontal: 12, vertical: 10),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: const [
+                  children: [
                     _InfoChip(icon: Icons.confirmation_number_rounded,
-                        label: 'Bus', value: 'NB-2341'),
-                    _Vdivider(),
+                        label: 'Bus', value: busId),
+                    const _Vdivider(),
                     _InfoChip(icon: Icons.speed_rounded,
-                        label: 'Speed', value: '42 km/h'),
-                    _Vdivider(),
+                        label: 'Speed', value: '$currentSpeed km/h'),
+                    const _Vdivider(),
                     _InfoChip(icon: Icons.people_rounded,
-                        label: 'Seats', value: '12 free'),
-                    _Vdivider(),
+                        label: 'Seats', value: '$freeSeats free'),
+                    const _Vdivider(),
                     _InfoChip(icon: Icons.location_on_rounded,
-                        label: 'Stop', value: '2 away'),
+                        label: 'Stop', value: stopStatus),
                   ],
                 ),
               ),

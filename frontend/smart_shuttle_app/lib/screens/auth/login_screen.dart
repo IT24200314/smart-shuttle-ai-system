@@ -11,6 +11,11 @@ import '../admin/admin_dashboard_screen.dart';
 import '../driver/driver_dashboard_screen.dart';
 import '../student/student_map_screen.dart';
 import 'registration_screen.dart';
+import '../../providers/app_state_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../utils/api_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,25 +42,73 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
 
     final email = _emailCtrl.text.trim().toLowerCase();
-    Widget destination;
+    final password = _passwordCtrl.text;
 
-    if (email.contains('admin')) {
-      destination = const AdminDashboardScreen();
-    } else if (email.contains('driver')) {
-      destination = const DriverDashboardScreen();
-    } else {
-      destination = const StudentMapScreen();
+    try {
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (res.statusCode == 200) {
+        final data = Map<String, dynamic>.from(json.decode(res.body));
+        final token = data['access_token'];
+        final roleStr = data['role'];
+        final name = data['name'];
+
+        // Save session
+        context.read<AppStateProvider>().setSession(token, email);
+
+        Widget destination;
+        if (roleStr == 'admin') {
+          context.read<AppStateProvider>().setRole(UserRole.admin);
+          destination = const AdminDashboardScreen();
+        } else if (roleStr == 'driver') {
+          context.read<AppStateProvider>().setRole(UserRole.driver);
+          destination = const DriverDashboardScreen();
+        } else {
+          context.read<AppStateProvider>().setRole(UserRole.student);
+          destination = const StudentMapScreen();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome back, $name!', style: GoogleFonts.inter(color: Colors.white)),
+            backgroundColor: AppTheme.positive,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => destination),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid user or password', style: GoogleFonts.inter(color: Colors.white)),
+            backgroundColor: AppTheme.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot connect to server (Is Python running?)', style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: AppTheme.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => destination),
-    );
   }
 
   void _skipForDemo() {
@@ -84,10 +137,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: AppTheme.accent.withValues(alpha: 0.12),
+                        color: AppTheme.accent.withOpacity(0.12),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppTheme.accent.withValues(alpha: 0.35),
+                          color: AppTheme.accent.withOpacity(0.35),
                           width: 1.5,
                         ),
                       ),
@@ -180,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _isLoading ? null : _handleLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.accent,
-                        disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.4),
+                        disabledBackgroundColor: AppTheme.accent.withOpacity(0.4),
                         shape: RoundedRectangleBorder(
                           borderRadius: AppTheme.cardRadius,
                         ),
@@ -232,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Text(
                       'Skip — Role Selection Demo',
                       style: GoogleFonts.inter(
-                        color: AppTheme.accent.withValues(alpha: 0.8),
+                        color: AppTheme.accent.withOpacity(0.8),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),

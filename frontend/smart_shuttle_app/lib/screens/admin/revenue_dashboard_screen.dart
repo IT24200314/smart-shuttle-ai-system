@@ -10,9 +10,40 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/kpi_card.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../utils/api_config.dart';
 
-class RevenueDashboardScreen extends StatelessWidget {
+class RevenueDashboardScreen extends StatefulWidget {
   const RevenueDashboardScreen({super.key});
+
+  @override
+  State<RevenueDashboardScreen> createState() => _RevenueDashboardScreenState();
+}
+
+class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
+  late Future<Map<String, dynamic>> _summaryFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _summaryFuture = fetchDashboardSummary();
+  }
+
+  Future<Map<String, dynamic>> fetchDashboardSummary() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/dashboard/revenue-summary'),
+      ).timeout(const Duration(seconds: 5));
+      
+      if (res.statusCode == 200) {
+        return Map<String, dynamic>.from(json.decode(res.body));
+      }
+      throw Exception('Server error: ${res.statusCode}');
+    } catch (e) {
+      throw Exception('Failed to connect: $e');
+    }
+  }
 
   static const List<FlSpot> _aiForecast = [
     FlSpot(0, 42), FlSpot(1, 44), FlSpot(2, 43), FlSpot(3, 48),
@@ -38,6 +69,42 @@ class RevenueDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _summaryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppTheme.background,
+            body: Center(child: CircularProgressIndicator(color: AppTheme.accent)),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: AppTheme.background,
+            body: Center(
+              child: Text(
+                'Sync Error: ${snapshot.error}',
+                style: GoogleFonts.inter(color: AppTheme.danger),
+              ),
+            ),
+          );
+        }
+
+        final data = snapshot.data!;
+        final summary = data['summary'] ?? {};
+        final trips = (data['recent_trips'] as List?)?.map((t) => _TripRow(
+          t['trip_id'] ?? '?',
+          t['route_id'] ?? 'Main',
+          t['passenger_count'] ?? 0,
+          t['revenue']?.toInt() ?? 0
+        )).toList() ?? [];
+
+        return _buildUI(context, summary, trips);
+      }
+    );
+  }
+
+  Widget _buildUI(BuildContext context, Map<String, dynamic> summary, List<_TripRow> trips) {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -69,7 +136,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                   color: AppTheme.positive, size: 19),
               tooltip: 'AI Report',
               style: IconButton.styleFrom(
-                backgroundColor: AppTheme.positive.withValues(alpha: 0.10),
+                backgroundColor: AppTheme.positive.withOpacity(0.10),
                 shape: RoundedRectangleBorder(
                     borderRadius: AppTheme.chipRadius),
               ),
@@ -85,8 +152,8 @@ class RevenueDashboardScreen extends StatelessWidget {
           children: [
             // ── AI Status Bar ─────────────────────────────────
             GlassCard(
-              fillColor: AppTheme.positive.withValues(alpha: 0.06),
-              borderColor: AppTheme.positive.withValues(alpha: 0.2),
+              fillColor: AppTheme.positive.withOpacity(0.06),
+              borderColor: AppTheme.positive.withOpacity(0.2),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: Row(
                 children: [
@@ -107,7 +174,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.positive.withValues(alpha: 0.15),
+                      color: AppTheme.positive.withOpacity(0.15),
                       borderRadius: AppTheme.chipRadius,
                     ),
                     child: Text('95% CI',
@@ -169,9 +236,9 @@ class RevenueDashboardScreen extends StatelessWidget {
             // Rule 1 & 2: Big numbers first → Daily Earnings is hero metric
             _HeroMetricCard(
               label: 'Daily Earnings',
-              value: 'LKR 18,450',
-              change: '+12% vs last week',
-              isPositive: true,
+              value: 'LKR ${summary['total_revenue']?.toInt() ?? 0}',
+              change: '${summary['revenue_growth'] ?? '+0'}% vs yesterday',
+              isPositive: (summary['revenue_growth'] ?? 0) >= 0,
             ),
             const SizedBox(height: 12),
 
@@ -183,22 +250,22 @@ class RevenueDashboardScreen extends StatelessWidget {
                 mainAxisSpacing: 12,
                 childAspectRatio: 1.55,
                 physics: const NeverScrollableScrollPhysics(),
-                children: const [
+                children: [
                   KpiCard(
                     icon: Icons.trending_up_rounded,
                     label: '30-Day Forecast',
-                    value: '420K',
-                    subtitle: 'High confidence',
+                    value: '${summary['forecast_30d'] ?? '0'}K',
+                    subtitle: 'AI Projection',
                     isPositive: true,
                     accentColor: AppTheme.positive,
                   ),
                   KpiCard(
                     icon: Icons.groups_rounded,
-                    label: 'Peak Demand',
-                    value: '82/hr',
-                    subtitle: '+15% revenue corr.',
-                    isPositive: true,
-                    accentColor: AppTheme.accent,
+                    label: 'Leakage',
+                    value: '${summary['leakage_percent']?.toStringAsFixed(1) ?? '0'}%',
+                    subtitle: 'LKR ${summary['leakage_amount']?.toInt() ?? 0}',
+                    isPositive: false,
+                    accentColor: AppTheme.danger,
                   ),
                 ],
               ),
@@ -301,7 +368,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                             dotData: const FlDotData(show: false),
                             belowBarData: BarAreaData(
                               show: true,
-                              color: AppTheme.positive.withValues(alpha: 0.06),
+                              color: AppTheme.positive.withOpacity(0.06),
                             ),
                           ),
                           LineChartBarData(
@@ -317,8 +384,8 @@ class RevenueDashboardScreen extends StatelessWidget {
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  AppTheme.positive.withValues(alpha: 0.18),
-                                  AppTheme.positive.withValues(alpha: 0.0),
+                                  AppTheme.positive.withOpacity(0.18),
+                                  AppTheme.positive.withOpacity(0.0),
                                 ],
                               ),
                             ),
@@ -382,7 +449,7 @@ class RevenueDashboardScreen extends StatelessWidget {
                       ),
                     ),
                     // Rows
-                    ..._trips.asMap().entries.map((e) => _TripTableRow(
+                    ...trips.asMap().entries.map((e) => _TripTableRow(
                           trip: e.value,
                           isEven: e.key.isEven,
                         )),
@@ -416,8 +483,8 @@ class _HeroMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final changeColor = isPositive ? AppTheme.positive : AppTheme.danger;
     return GlassCard(
-      fillColor: AppTheme.positive.withValues(alpha: 0.05),
-      borderColor: AppTheme.positive.withValues(alpha: 0.2),
+      fillColor: AppTheme.positive.withOpacity(0.05),
+      borderColor: AppTheme.positive.withOpacity(0.2),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: Row(
         children: [
@@ -468,7 +535,7 @@ class _HeroMetricCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppTheme.positive.withValues(alpha: 0.12),
+              color: AppTheme.positive.withOpacity(0.12),
               borderRadius: AppTheme.chipRadius,
             ),
             child: const Icon(Icons.monetization_on_rounded,
@@ -511,7 +578,7 @@ class _LiveTag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: color.withOpacity(0.12),
           borderRadius: AppTheme.chipRadius,
         ),
         child: Text(label,
@@ -533,7 +600,7 @@ class _LegendChip extends StatelessWidget {
         children: [
           Container(
               width: 14, height: 2,
-              color: dashed ? color.withValues(alpha: 0.3) : color),
+              color: dashed ? color.withOpacity(0.3) : color),
           const SizedBox(width: 5),
           Text(label,
               style: GoogleFonts.inter(
@@ -567,7 +634,7 @@ class _TripTableRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: isEven
-          ? AppTheme.surfaceHigh.withValues(alpha: 0.5)
+          ? AppTheme.surfaceHigh.withOpacity(0.5)
           : Colors.transparent,
       child: Row(
         children: [

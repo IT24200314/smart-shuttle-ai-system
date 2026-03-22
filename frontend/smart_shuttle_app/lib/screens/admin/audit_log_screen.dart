@@ -109,7 +109,7 @@ class AuditLogScreen extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: AppTheme.emerald.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: AppTheme.emerald.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
                   child: Text('LIVE',
                       style: GoogleFonts.inter(color: AppTheme.emerald, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
@@ -143,7 +143,7 @@ class AuditLogScreen extends StatelessWidget {
 
                 return GlassCard(
                   padding: const EdgeInsets.all(2),
-                  borderColor: Colors.blueAccent.withValues(alpha: 0.3),
+                  borderColor: Colors.blueAccent.withOpacity(0.3),
                   child: Scrollbar(
                     thickness: 4,
                     radius: const Radius.circular(4),
@@ -156,7 +156,7 @@ class AuditLogScreen extends StatelessWidget {
                         child: DataTable(
                           columnSpacing: 16,
                           headingRowColor: WidgetStateProperty.resolveWith(
-                            (states) => Colors.blueAccent.withValues(alpha: 0.1),
+                            (states) => Colors.blueAccent.withOpacity(0.1),
                           ),
                           columns: [
                             DataColumn(label: Text('Time', style: GoogleFonts.inter(color: AppTheme.textPrimary, fontWeight: FontWeight.bold, fontSize: 12))),
@@ -189,7 +189,7 @@ class AuditLogScreen extends StatelessWidget {
         DataCell(Text(role, style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 12))),
         DataCell(Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
             child: Text(module, style: GoogleFonts.inter(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
         )),
         DataCell(Text(actionType, style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 11))),

@@ -10,6 +10,19 @@ enum CrowdDensity { low, medium, high }
 enum UserRole { student, driver, admin }
 
 class AppStateProvider extends ChangeNotifier {
+  // ── Session & Auth ─────────────────────────────────────────
+  String? _jwtToken;
+  String? get jwtToken => _jwtToken;
+
+  String? _userEmail;
+  String? get userEmail => _userEmail;
+
+  void setSession(String? token, String? email) {
+    _jwtToken = token;
+    _userEmail = email;
+    notifyListeners();
+  }
+
   // ── Role ───────────────────────────────────────────────────
   UserRole _currentRole = UserRole.student;
   UserRole get currentRole => _currentRole;

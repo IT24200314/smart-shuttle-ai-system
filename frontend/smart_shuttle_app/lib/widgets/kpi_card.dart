@@ -54,7 +54,7 @@ class KpiCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.12),
+                            color: accent.withOpacity(0.12),
                             borderRadius: AppTheme.chipRadius,
                           ),
                           child: Icon(icon, color: accent, size: 14),

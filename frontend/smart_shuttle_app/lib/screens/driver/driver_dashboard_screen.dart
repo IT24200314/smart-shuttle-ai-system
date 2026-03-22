@@ -11,6 +11,9 @@ import '../../theme/app_theme.dart';
 import '../../providers/app_state_provider.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/alert_card.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../utils/api_config.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -38,8 +41,133 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
     _btnScale = _btnCtrl;
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      context.read<AppStateProvider>().tickSecond();
+      final p = context.read<AppStateProvider>();
+      if (p.sessionActive) {
+        p.tickSecond();
+        if (p.tripDurationSeconds % 10 == 0) {
+          _fetchLiveTelemetry();
+        }
+      }
     });
+  }
+
+  Future<void> _fetchLiveTelemetry() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/map/live-location/NB-2341'),
+      ).timeout(const Duration(seconds: 2));
+
+      if (res.statusCode == 200 && mounted) {
+        final data = json.decode(res.body);
+        // Speed and passengers are in data
+        // For now we trust the backend's status, but keep local toggle too
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _handleSessionToggle() async {
+    final provider = context.read<AppStateProvider>();
+    if (!provider.sessionActive) {
+      // START TRIP
+      final tripType = await _showStartDialog();
+      if (tripType == null) return;
+
+      try {
+        final res = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/driver/start-trip'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'bus_id': 'NB-2341',
+            'trip_type': tripType,
+            'driver_id': 'driver-01'
+          }),
+        );
+        if (res.statusCode == 200) {
+          provider.toggleSession();
+        }
+      } catch (e) {
+        _showError('Server connection failed');
+      }
+    } else {
+      // END TRIP
+      final counts = await _showEndDialog();
+      if (counts == null) return;
+
+      try {
+        final res = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/driver/end-trip'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'bus_id': 'NB-2341',
+            'trip_type': 'Standard', // or store from start
+            'tickets_75': counts['75'] ?? 0,
+            'tickets_100': counts['100'] ?? 0,
+            'tickets_150': counts['150'] ?? 0,
+            'tickets_200': counts['200'] ?? 0,
+          }),
+        );
+        if (res.statusCode == 200) {
+          provider.toggleSession();
+          _showSuccess('Trip data synced to revenue engine');
+        }
+      } catch (e) {
+        _showError('Failed to finalize trip');
+      }
+    }
+  }
+
+  Future<String?> _showStartDialog() async {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceHigh,
+        title: Text('Start New Trip', style: GoogleFonts.inter(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: ['Morning', 'Evening', 'Special'].map((t) => ListTile(
+            title: Text(t, style: GoogleFonts.inter(color: Colors.white)),
+            onTap: () => Navigator.pop(ctx, t),
+          )).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, int>?> _showEndDialog() async {
+    final c75 = TextEditingController(text: '0');
+    final c100 = TextEditingController(text: '0');
+    return showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceHigh,
+        title: Text('Finalize Tickets', style: GoogleFonts.inter(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TicketField(label: '75 LKR Tickets', controller: c75),
+            _TicketField(label: '100 LKR Tickets', controller: c100),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, {
+              '75': int.tryParse(c75.text) ?? 0,
+              '100': int.tryParse(c100.text) ?? 0,
+              '150': 0, '200': 0
+            }),
+            child: const Text('Submit')
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppTheme.danger));
+  }
+  void _showSuccess(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppTheme.positive));
   }
 
   @override
@@ -106,7 +234,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
               onTapDown: (_) => _btnCtrl.reverse(),
               onTapUp: (_) {
                 _btnCtrl.forward();
-                context.read<AppStateProvider>().toggleSession();
+                _handleSessionToggle();
               },
               onTapCancel: () => _btnCtrl.forward(),
               child: AnimatedBuilder(
@@ -180,10 +308,10 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                          color: const Color(0xFF8B5CF6).withOpacity(0.15),
                           borderRadius: AppTheme.chipRadius,
                           border: Border.all(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                            color: const Color(0xFF8B5CF6).withOpacity(0.35),
                           ),
                         ),
                         child: Text('Admin',
@@ -354,11 +482,11 @@ class _SessionButton extends StatelessWidget {
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
         borderRadius: AppTheme.cardRadius,
-        color: color.withValues(alpha: 0.08),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+        color: color.withOpacity(0.08),
+        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.12),
+            color: color.withOpacity(0.12),
             blurRadius: 14,
             spreadRadius: 0,
           ),
@@ -414,9 +542,9 @@ class _DutyBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withOpacity(0.10),
         borderRadius: AppTheme.chipRadius,
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -508,6 +636,29 @@ class _DeductRow extends StatelessWidget {
                   color: color, fontSize: 11, fontWeight: FontWeight.w700)),
         ],
       );
+}
+
+class _TicketField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  const _TicketField({required this.label, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        style: GoogleFonts.inter(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
+          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+        ),
+      ),
+    );
+  }
 }
 
 class _SectionLabel extends StatelessWidget {

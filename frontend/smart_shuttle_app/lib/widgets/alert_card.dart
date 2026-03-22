@@ -61,16 +61,16 @@ class _AlertCardState extends State<AlertCard>
       decoration: BoxDecoration(
         borderRadius: AppTheme.cardRadius,
         color: widget.isActive
-            ? color.withValues(alpha: 0.10)
+            ? color.withOpacity(0.10)
             : AppTheme.surface,
         border: Border.all(
-          color: widget.isActive ? color.withValues(alpha: 0.6) : AppTheme.border,
+          color: widget.isActive ? color.withOpacity(0.6) : AppTheme.border,
           width: 1,
         ),
         boxShadow: widget.isActive
             ? [
                 BoxShadow(
-                  color: color.withValues(alpha: 0.20),
+                  color: color.withOpacity(0.20),
                   blurRadius: 18,
                   spreadRadius: 0,
                 )
@@ -100,7 +100,7 @@ class _AlertCardState extends State<AlertCard>
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: widget.isActive
-                      ? color.withValues(alpha: 0.18)
+                      ? color.withOpacity(0.18)
                       : AppTheme.surfaceHigh,
                   borderRadius: AppTheme.chipRadius,
                 ),
@@ -133,7 +133,7 @@ class _AlertCardState extends State<AlertCard>
                       widget.isActive ? 'ALERT ACTIVE — AI detected event' : widget.subtitle,
                       style: GoogleFonts.inter(
                         color: widget.isActive
-                            ? color.withValues(alpha: 0.85)
+                            ? color.withOpacity(0.85)
                             : AppTheme.textSecondary,
                         fontSize: 11,
                         fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.w400,
@@ -151,7 +151,7 @@ class _AlertCardState extends State<AlertCard>
                   onPressed: widget.onSimulate,
                   style: TextButton.styleFrom(
                     backgroundColor: widget.isActive
-                        ? color.withValues(alpha: 0.15)
+                        ? color.withOpacity(0.15)
                         : AppTheme.surfaceHigh,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     shape: RoundedRectangleBorder(
