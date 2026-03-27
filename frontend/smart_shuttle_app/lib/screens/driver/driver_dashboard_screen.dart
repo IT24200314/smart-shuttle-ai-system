@@ -14,6 +14,7 @@ import '../../widgets/alert_card.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../utils/api_config.dart';
+import '../auth/login_screen.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -40,22 +41,46 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
     );
     _btnScale = _btnCtrl;
 
+    _fetchSafetyScore();
+
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final p = context.read<AppStateProvider>();
       if (p.sessionActive) {
         p.tickSecond();
         if (p.tripDurationSeconds % 10 == 0) {
           _fetchLiveTelemetry();
+          _fetchSafetyScore();
         }
       }
     });
   }
 
+  Future<void> _fetchSafetyScore() async {
+    try {
+      final provider = context.read<AppStateProvider>();
+      final driverEmail = provider.userEmail ?? 'driver-01';
+      final encoded = Uri.encodeComponent(driverEmail);
+      final res = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/driver/safety-score/$encoded'),
+          )
+          .timeout(const Duration(seconds: 3));
+
+      if (res.statusCode == 200 && mounted) {
+        final data = json.decode(res.body);
+        final score = (data['safety_score'] as num?)?.toDouble() ?? 100.0;
+        provider.setSafetyScore(score);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchLiveTelemetry() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/map/live-location/NB-2341'),
-      ).timeout(const Duration(seconds: 2));
+      final res = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/map/live-location/NB-2341'),
+          )
+          .timeout(const Duration(seconds: 2));
 
       if (res.statusCode == 200 && mounted) {
         final data = json.decode(res.body);
@@ -79,7 +104,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           body: json.encode({
             'bus_id': 'NB-2341',
             'trip_type': tripType,
-            'driver_id': 'driver-01'
+            'driver_id': provider.userEmail ?? 'driver-01'
           }),
         );
         if (res.statusCode == 200) {
@@ -121,13 +146,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceHigh,
-        title: Text('Start New Trip', style: GoogleFonts.inter(color: Colors.white)),
+        title: Text('Start New Trip',
+            style: GoogleFonts.inter(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: ['Morning', 'Evening', 'Special'].map((t) => ListTile(
-            title: Text(t, style: GoogleFonts.inter(color: Colors.white)),
-            onTap: () => Navigator.pop(ctx, t),
-          )).toList(),
+          children: ['Morning', 'Evening', 'Special']
+              .map((t) => ListTile(
+                    title:
+                        Text(t, style: GoogleFonts.inter(color: Colors.white)),
+                    onTap: () => Navigator.pop(ctx, t),
+                  ))
+              .toList(),
         ),
       ),
     );
@@ -142,7 +171,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceHigh,
-        title: Text('Finalize Tickets', style: GoogleFonts.inter(color: Colors.white)),
+        title: Text('Finalize Tickets',
+            style: GoogleFonts.inter(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -153,26 +183,66 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, {
-              '75': int.tryParse(c75.text) ?? 0,
-              '100': int.tryParse(c100.text) ?? 0,
-              '150': int.tryParse(c150.text) ?? 0,
-              '200': int.tryParse(c200.text) ?? 0,
-            }),
-            child: const Text('Submit')
-          ),
+              onPressed: () => Navigator.pop(ctx, {
+                    '75': int.tryParse(c75.text) ?? 0,
+                    '100': int.tryParse(c100.text) ?? 0,
+                    '150': int.tryParse(c150.text) ?? 0,
+                    '200': int.tryParse(c200.text) ?? 0,
+                  }),
+              child: const Text('Submit')),
         ],
       ),
     );
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppTheme.danger));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: AppTheme.danger));
   }
+
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppTheme.positive));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: AppTheme.positive));
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceHigh,
+        title: Text('Logout',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          'Are you sure you want to log out?',
+          style: GoogleFonts.inter(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Logout',
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -223,10 +293,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           ],
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _DutyBadge(active: provider.sessionActive),
+          _DutyBadge(active: provider.sessionActive),
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.power_settings_new_rounded,
+                color: AppTheme.danger, size: 22),
+            onPressed: _logout,
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SingleChildScrollView(
@@ -394,15 +468,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 11),
+                                  color: AppTheme.textSecondary, fontSize: 11),
                             ),
                             const SizedBox(height: 10),
-                            _DeductRow('Drowsiness event',
-                                '–8 pts', AppTheme.warning),
+                            _DeductRow('Yawn detection', '–1 pts',
+                                const Color.fromARGB(255, 234, 203, 26)),
                             const SizedBox(height: 4),
-                            _DeductRow('Phone use event',
-                                '–5 pts', AppTheme.danger),
+                            _DeductRow('Phone use event', '–2 pts',
+                                const Color.fromARGB(255, 203, 98, 12)),
+                            const SizedBox(height: 4),
+                            _DeductRow('Drowsiness detection', '–5 pts',
+                                const Color.fromARGB(255, 206, 11, 11))
                           ],
                         ),
                       ),
@@ -418,15 +494,15 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
             const SizedBox(height: 12),
 
             AlertCard(
-              icon: Icons.remove_red_eye_rounded,
-              title: 'Drowsiness Detected',
-              subtitle: 'AI monitors eye closure & head position',
-              isActive: provider.drowsinessAlert,
-              alertColor: AppTheme.warning,
+              icon: Icons.sentiment_very_satisfied_rounded,
+              title: 'Yawn Detected',
+              subtitle: 'AI monitors mouth opening',
+              isActive: provider.yawnAlert,
+              alertColor: const Color.fromARGB(255, 234, 203, 26),
               onSimulate: provider.sessionActive
                   ? () => context
                       .read<AppStateProvider>()
-                      .triggerDrowsiness(!provider.drowsinessAlert)
+                      .triggerYawn(!provider.yawnAlert)
                   : null,
             ),
             const SizedBox(height: 10),
@@ -435,11 +511,24 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
               title: 'Phone Use Detected',
               subtitle: 'Vision model: handheld device detection',
               isActive: provider.phoneUseAlert,
-              alertColor: AppTheme.danger,
+              alertColor: const Color.fromARGB(255, 203, 98, 12),
               onSimulate: provider.sessionActive
                   ? () => context
                       .read<AppStateProvider>()
                       .triggerPhoneUse(!provider.phoneUseAlert)
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            AlertCard(
+              icon: Icons.remove_red_eye_rounded,
+              title: 'Drowsiness Detected',
+              subtitle: 'AI monitors eye closure & head position',
+              isActive: provider.drowsinessAlert,
+              alertColor: const Color.fromARGB(255, 206, 11, 11),
+              onSimulate: provider.sessionActive
+                  ? () => context
+                      .read<AppStateProvider>()
+                      .triggerDrowsiness(!provider.drowsinessAlert)
                   : null,
             ),
 
@@ -447,8 +536,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
               const SizedBox(height: 14),
               GlassCard(
                 fillColor: AppTheme.surfaceHigh,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
                     const Icon(Icons.info_outline_rounded,
@@ -555,7 +644,8 @@ class _DutyBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
@@ -625,9 +715,9 @@ class _DeductRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Container(
-              width: 5, height: 5,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle)),
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 7),
           Expanded(
             child: Text(label,
@@ -659,7 +749,8 @@ class _TicketField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           labelStyle: GoogleFonts.inter(color: AppTheme.textSecondary),
-          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.border)),
+          enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppTheme.border)),
         ),
       ),
     );

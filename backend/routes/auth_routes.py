@@ -4,6 +4,10 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from models.schemas import AuthRegisterRequest, AuthLoginRequest
 from utils.security import get_password_hash, verify_password, create_access_token
 import uuid
+import sys
+import os
+import subprocess
+from datetime import datetime
 
 router = APIRouter()
 
@@ -52,11 +56,33 @@ def login(req: AuthLoginRequest):
                 pass # Allow demo entries to slide if password is blank, otherwise enforce hash check if implemented
 
         # Generate True JWT Token
+        user_role = user.get('role', 'student')
         token = create_access_token({
             "sub": user_id,
             "email": user.get('email'),
-            "role": user.get('role', 'student')
+            "role": user_role
         })
+
+        if user_role == 'driver':
+            # Initialize daily driver behavior logs document
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            doc_id = f"{user.get('email')}_{date_str}"
+            doc_ref = db.collection('driver_behavior_logs').document(doc_id)
+            
+            doc = doc_ref.get()
+            if not doc.exists:
+                doc_ref.set({
+                    'email': user.get('email'),
+                    'date': date_str,
+                    'number_of_ywan': 0,
+                    'number_of_usephone': 0,
+                    'number_of_drowsiness': 0,
+                    'safety_score': 100
+                })
+            
+            # Spawn the camera tracking python script natively without blocking
+            script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'driver_camera.py')
+            subprocess.Popen([sys.executable, script_path, user.get('email')])
 
         return {
             "message": "Login successful",

@@ -5,8 +5,10 @@
 // ============================================================
 
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 enum CrowdDensity { low, medium, high }
+
 enum UserRole { student, driver, admin }
 
 class AppStateProvider extends ChangeNotifier {
@@ -39,16 +41,26 @@ class AppStateProvider extends ChangeNotifier {
   int _tripDurationSeconds = 0;
   int get tripDurationSeconds => _tripDurationSeconds;
 
-  double _safetyScore = 97.0;
+  double _safetyScore = 100.0;
   double get safetyScore => _safetyScore;
+
+  void setSafetyScore(double score) {
+    _safetyScore = score.clamp(0, 100);
+    notifyListeners();
+  }
 
   void toggleSession() {
     _sessionActive = !_sessionActive;
     if (!_sessionActive) {
       _tripDurationSeconds = 0;
-      _safetyScore = 97.0;
+      // Keep safety score in-sync with the database, do not reset to 100 here.
       _drowsinessAlert = false;
       _phoneUseAlert = false;
+      _yawnAlert = false;
+      // Cancel any pending timers
+      _yawnClearTimer?.cancel();
+      _phoneUseClearTimer?.cancel();
+      _drowsinessClearTimer?.cancel();
     }
     notifyListeners();
   }
@@ -61,20 +73,60 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   // ── Driver Safety Alerts ───────────────────────────────────
+  bool _yawnAlert = false;
   bool _drowsinessAlert = false;
-  bool _phoneUseAlert   = false;
+  bool _phoneUseAlert = false;
+  bool get yawnAlert => _yawnAlert;
   bool get drowsinessAlert => _drowsinessAlert;
-  bool get phoneUseAlert   => _phoneUseAlert;
+  bool get phoneUseAlert => _phoneUseAlert;
+
+  // ── Auto-clear timers ──────────────────────────────────────
+  Timer? _yawnClearTimer;
+  Timer? _phoneUseClearTimer;
+  Timer? _drowsinessClearTimer;
+
+  void triggerYawn(bool active) {
+    _yawnAlert = active;
+    _yawnClearTimer?.cancel();
+
+    if (active) {
+      _safetyScore = (_safetyScore - 1).clamp(0, 100);
+      // Auto-clear after 3 seconds
+      _yawnClearTimer = Timer(const Duration(seconds: 3), () {
+        _yawnAlert = false;
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
 
   void triggerDrowsiness(bool active) {
     _drowsinessAlert = active;
-    if (active) _safetyScore = (_safetyScore - 8).clamp(0, 100);
+    _drowsinessClearTimer?.cancel();
+
+    if (active) {
+      _safetyScore = (_safetyScore - 5).clamp(0, 100);
+      // Auto-clear after 3 seconds
+      _drowsinessClearTimer = Timer(const Duration(seconds: 3), () {
+        _drowsinessAlert = false;
+        notifyListeners();
+      });
+    }
     notifyListeners();
   }
 
   void triggerPhoneUse(bool active) {
     _phoneUseAlert = active;
-    if (active) _safetyScore = (_safetyScore - 5).clamp(0, 100);
+    _phoneUseClearTimer?.cancel();
+
+    if (active) {
+      _safetyScore = (_safetyScore - 2).clamp(0, 100);
+      // Auto-clear after 3 seconds
+      _phoneUseClearTimer = Timer(const Duration(seconds: 3), () {
+        _phoneUseAlert = false;
+        notifyListeners();
+      });
+    }
     notifyListeners();
   }
 
