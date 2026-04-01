@@ -19,7 +19,7 @@ def start_trip(req: StartTripRequest):
             'driver_id': req.driver_id
         })
         
-        # Set session_active to True in daily driver log
+        # When drive start the session, then session_active turn to true in database, then driver_camera.py will start the camera and monitoring
         date_str = datetime.now().strftime('%Y-%m-%d')
         doc_id = f"{req.driver_id}_{date_str}"
         db.collection('driver_behavior_logs').document(doc_id).set({'session_active': True}, merge=True)
@@ -46,13 +46,12 @@ def end_trip(req: EndTripRequest):
                 'passenger_count': 0
             })
             
-            # Set session_active to False in daily driver log
+            # When driver stop the session, then session_active turn to false in database, then driver_camera.py will stop the camera and monitoring
             date_str = datetime.now().strftime('%Y-%m-%d')
             doc_id = f"{driver_id}_{date_str}"
             db.collection('driver_behavior_logs').document(doc_id).set({'session_active': False}, merge=True)
 
-        # Calculate backend logic strictly on the server!
-        # Ticket revenues
+        # Calculate the total ticket price and get the profit or loss 
         rev_75 = req.tickets_75 * 75
         rev_100 = req.tickets_100 * 100
         rev_150 = req.tickets_150 * 150
@@ -94,6 +93,7 @@ def end_trip(req: EndTripRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Get the safety score of the login driver, and return the safety score 
 @router.get("/driver/safety-score/{driver_email}")
 def get_driver_safety_score(driver_email: str):
     try:
@@ -121,38 +121,6 @@ def get_driver_safety_score(driver_email: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-#@router.post("/driver/behavior")
-#def log_behavior(req: DriverBehaviorRequest):
-#    try:
-#        log_id = f"BEH-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
-#        doc_data = {
-#            'bus_id': req.bus_id,
-#            'driver_id': req.driver_id,
-#            'event_type': req.event_type,
-#            'severity': req.severity,
-#            'confidence': req.confidence,
-#            'timestamp': datetime.now().isoformat()
-#        }
-#        
-#        # Save to logs
-#        db.collection('driver_behavior_logs').document(log_id).set(doc_data)
-#        
-#        # If severe, trigger alert
-#        if req.severity.lower() in ['high', 'critical']:
-#            alert_id = f"ALR-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-#            db.collection('alert_history').document(alert_id).set({
-#                'type': 'driver_behavior',
-#                'description': f"Critical driver behavior detected: {req.event_type}",
-#                'bus_id': req.bus_id,
-#                'driver_id': req.driver_id,
-#                'timestamp': datetime.now().isoformat(),
-#                'status': 'unread'
-#            })
-#            
-#        return {"message": "Behavior logged successfully", "log_id": log_id}
-#    except Exception as e:
-#        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/driver/passenger-log")
 def log_passenger(req: PassengerLogRequest):

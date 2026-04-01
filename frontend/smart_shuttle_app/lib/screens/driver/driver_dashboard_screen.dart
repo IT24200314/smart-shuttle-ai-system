@@ -1,8 +1,3 @@
-// ============================================================
-// Smart Shuttle — Driver Dashboard (Overflow-fixed)
-// SessionButton Column wrapped, StatTile value FittedBox
-// ============================================================
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,9 +42,11 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       final p = context.read<AppStateProvider>();
       if (p.sessionActive) {
         p.tickSecond();
+        if (p.tripDurationSeconds % 2 == 0) {
+          _fetchSafetyScore();
+        }
         if (p.tripDurationSeconds % 10 == 0) {
           _fetchLiveTelemetry();
-          _fetchSafetyScore();
         }
       }
     });
@@ -70,6 +67,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         final data = json.decode(res.body);
         final score = (data['safety_score'] as num?)?.toDouble() ?? 100.0;
         provider.setSafetyScore(score);
+
+        final y = data['number_of_ywan'] ?? 0;
+        final pLog = data['number_of_usephone'] ?? 0;
+        final d = data['number_of_drowsiness'] ?? 0;
+
+        provider.syncCounts(
+          y is int ? y : int.tryParse(y.toString()) ?? 0,
+          pLog is int ? pLog : int.tryParse(pLog.toString()) ?? 0,
+          d is int ? d : int.tryParse(d.toString()) ?? 0,
+        );
       }
     } catch (_) {}
   }
@@ -338,22 +345,12 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatTile(
-                      icon: Icons.speed_rounded,
-                      label: 'Speed',
-                      value: provider.sessionActive ? '38 km/h' : '—',
-                      color: provider.sessionActive
-                          ? AppTheme.positive
-                          : AppTheme.textMuted,
-                    ),
-                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatTile(
                       icon: Icons.people_rounded,
                       label: 'Passengers',
-                      value: provider.sessionActive ? '24' : '—',
+                      value: provider.sessionActive ? '00' : '—',
                       color: provider.sessionActive
                           ? AppTheme.positive
                           : AppTheme.textMuted,

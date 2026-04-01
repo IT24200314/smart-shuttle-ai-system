@@ -63,8 +63,10 @@ def login(req: AuthLoginRequest):
             "role": user_role
         })
 
+        # If the user is a driver, create unique document for per day to track driver behavior 
         if user_role == 'driver':
-            # Initialize daily driver behavior logs document
+            
+            # Create unique ID using email + data
             date_str = datetime.now().strftime('%Y-%m-%d')
             doc_id = f"{user.get('email')}_{date_str}"
             doc_ref = db.collection('driver_behavior_logs').document(doc_id)
