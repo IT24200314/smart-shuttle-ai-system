@@ -9,6 +9,7 @@ from ultralytics import YOLO
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.firebase_config import db
 
+
 def main(email):
     # Initialize connection to db
     if not db:
@@ -18,9 +19,12 @@ def main(email):
     date_str = datetime.now().strftime('%Y-%m-%d')
     doc_id = f"{email}_{date_str}"
     doc_ref = db.collection('driver_behavior_logs').document(doc_id)
-    
+
     # Load YOLO Model
-    model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../ai_models/driver_behavior/best.pt'))
+    model_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '../ai_models/driver_behavior/best.pt')
+    )
+
     try:
         model = YOLO(model_path)
     except Exception as e:
@@ -29,7 +33,7 @@ def main(email):
 
     # Session state to toggle camera on/off
     session_state = {"active": False, "running": True}
-    
+
     def on_snapshot(doc_snapshot, changes, read_time):
         for doc in doc_snapshot:
             if doc.exists:
@@ -39,13 +43,21 @@ def main(email):
 
     cap = None
 
-    # Cooldown setup to prevent database spamming
+    # Cooldown to prevent repeated DB updates
     last_event_time = {
         'yawn': 0.0,
         'usephone': 0.0,
         'drowsiness': 0.0
     }
     cooldown_seconds = 5
+
+    # Need continuous detection for 3 seconds before updating
+    detection_start_time = {
+        'yawn': None,
+        'usephone': None,
+        'drowsiness': None
+    }
+    detection_required_seconds = 1
 
     print(f"Starting driver behavior monitor for {email}...")
 
@@ -54,7 +66,7 @@ def main(email):
             if cap is None or not cap.isOpened():
                 print("Session started, opening camera...")
                 cap = cv2.VideoCapture(0)
-            
+
             if cap is None or not cap.isOpened():
                 time.sleep(1)
                 continue
@@ -65,48 +77,90 @@ def main(email):
 
             # Run inference
             results = model(frame, verbose=False)
-            
-            detected_text = ""
-            event_trigger = ""
+
+            # Current frame detections
+            found_events = {
+                'yawn': False,
+                'usephone': False,
+                'drowsiness': False
+            }
 
             for r in results:
                 boxes = r.boxes
                 for box in boxes:
                     cls_id = int(box.cls[0])
                     conf = float(box.conf[0])
-                    
-                    # Check confidence threshold
+
+                    # Confidence threshold
                     if conf < 0.5:
                         continue
 
                     class_name = r.names[cls_id].lower().replace(" ", "")
 
                     if "yawn" in class_name:
-                        event_trigger = "yawn"
-                        detected_text = "Yawn detected"
+                        found_events['yawn'] = True
                     elif "usephone" in class_name or "phone" in class_name:
-                        event_trigger = "usephone"
-                        detected_text = "Use phone detected"
+                        found_events['usephone'] = True
                     elif "drows" in class_name:
-                        event_trigger = "drowsiness"
-                        detected_text = "Drowsiness detected"
+                        found_events['drowsiness'] = True
+
+            current_time = time.time()
+            detected_text = ""
+            event_trigger = ""
+
+            # Update detection timers
+            for event_name in detection_start_time.keys():
+                if found_events[event_name]:
+                    if detection_start_time[event_name] is None:
+                        detection_start_time[event_name] = current_time
+                else:
+                    detection_start_time[event_name] = None
+
+            # Check whether any event has been continuously detected for 3 seconds
+            # Priority can be changed if needed
+            if (
+                detection_start_time['usephone'] is not None and
+                current_time - detection_start_time['usephone'] >= detection_required_seconds
+            ):
+                event_trigger = 'usephone'
+                detected_text = "Use phone detected"
+
+            elif (
+                detection_start_time['drowsiness'] is not None and
+                current_time - detection_start_time['drowsiness'] >= detection_required_seconds
+            ):
+                event_trigger = 'drowsiness'
+                detected_text = "Drowsiness detected"
+
+            elif (
+                detection_start_time['yawn'] is not None and
+                current_time - detection_start_time['yawn'] >= detection_required_seconds
+            ):
+                event_trigger = 'yawn'
+                detected_text = "Yawn detected"
 
             # Handle UI Text and Database Updates
             if event_trigger != "":
                 # Draw visual alert
-                cv2.putText(frame, detected_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 
-                            1, (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.putText(
+                    frame,
+                    detected_text,
+                    (50, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 0, 255),
+                    2,
+                    cv2.LINE_AA
+                )
 
-                current_time = float(time.time())
+                # Update DB only after cooldown
                 if current_time - last_event_time[event_trigger] > cooldown_seconds:
                     try:
-                        # Perform database update via transaction or simple getting and updating
-                        # Here we fetch the current doc, because we modify multiple things
                         doc = doc_ref.get()
                         if doc.exists:
                             data = doc.to_dict()
                             score = data.get('safety_score', 100)
-                            
+
                             updates = {}
                             if event_trigger == "yawn":
                                 updates['number_of_ywan'] = data.get('number_of_ywan', 0) + 1
@@ -117,14 +171,16 @@ def main(email):
                             elif event_trigger == "drowsiness":
                                 updates['number_of_drowsiness'] = data.get('number_of_drowsiness', 0) + 1
                                 updates['safety_score'] = score - 5
-                                
+
                             doc_ref.update(updates)
                             print(f"Logged {detected_text} into DB. Updated score: {updates['safety_score']}")
 
+                            # Reset that event timer after successful update
+                            detection_start_time[event_trigger] = None
+                            last_event_time[event_trigger] = current_time
+
                     except Exception as e:
                         print(f"Error updating Firestore: {e}")
-
-                    last_event_time[event_trigger] = current_time
 
             cv2.imshow('Driver Behavior Monitor', frame)
 
@@ -132,6 +188,7 @@ def main(email):
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 session_state["running"] = False
                 break
+
         else:
             if cap is not None and cap.isOpened():
                 print("Session stopped, closing camera...")
@@ -142,7 +199,10 @@ def main(email):
 
     if cap is not None and cap.isOpened():
         cap.release()
+
     cv2.destroyAllWindows()
+    doc_watch.unsubscribe()
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
