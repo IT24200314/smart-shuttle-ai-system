@@ -1,96 +1,119 @@
-from fastapi import APIRouter, HTTPException
-from utils.firebase_config import db
-from google.cloud.firestore_v1.base_query import FieldFilter
-from models.schemas import AuthRegisterRequest, AuthLoginRequest
-from utils.security import get_password_hash, verify_password, create_access_token
-import uuid
-import sys
 import os
 import subprocess
+import sys
+import uuid
 from datetime import datetime
 
+from fastapi import APIRouter, HTTPException
+
+from models.schemas import AuthLoginRequest, AuthRegisterRequest
+from services.user_service import UserService, normalize_email
+from utils.firebase_config import db
+from utils.security import create_access_token, get_password_hash, verify_password
+
+
 router = APIRouter()
+
 
 @router.post("/auth/register")
 def register(req: AuthRegisterRequest):
     try:
-        # Check if email exists
-        existing = db.collection('users').where(filter=FieldFilter('email', '==', req.email)).limit(1).get()
+        email = normalize_email(req.email)
+        existing = UserService.get_user_by_email(email)
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        user_id = f"USR-{uuid.uuid4().hex[:6]}"
+        user_id = f"USR-{uuid.uuid4().hex[:8].upper()}"
         hashed_pw = get_password_hash(req.password)
-        
-        db.collection('users').document(user_id).set({
-            'email': req.email,
-            'password_hash': hashed_pw,
-            'role': req.role,
-            'name': req.name,
-            'status': 'active'
-        })
-        return {"message": "User registered successfully", "user_id": user_id}
+        UserService.create_user_record(
+            user_id=user_id,
+            email=email,
+            name=req.name,
+            role=req.role,
+            password_hash=hashed_pw,
+        )
+        return {
+            "message": "User registered successfully",
+            "user_id": user_id,
+        }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/auth/login")
 def login(req: AuthLoginRequest):
     try:
-        users = db.collection('users').where(filter=FieldFilter('email', '==', req.email)).limit(1).get()
-        if not users:
+        found = UserService.get_user_by_email(req.email)
+        if not found:
             raise HTTPException(status_code=401, detail="Invalid credentials")
-            
-        user = users[0].to_dict()
-        user_id = users[0].id
-        
-        # Verify password (if the user was seeded manually without a hash, we auto-pass for demo)
-        stored_hash = user.get('password_hash')
+
+        user_id, user = found
+        user_status = str(user.get("status", "active")).lower()
+        if user_status != "active":
+            raise HTTPException(
+                status_code=403,
+                detail="This account is disabled or deleted",
+            )
+
+        stored_hash = user.get("password_hash")
         if stored_hash:
             if not verify_password(req.password, stored_hash):
                 raise HTTPException(status_code=401, detail="Invalid credentials")
         else:
-            # Fallback for plain-text or seeded mock users
-            if user.get('password') != req.password and req.password != 'password':
-                pass # Allow demo entries to slide if password is blank, otherwise enforce hash check if implemented
+            if user.get("password") != req.password and req.password != "password":
+                raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Generate True JWT Token
-        user_role = user.get('role', 'student')
-        token = create_access_token({
-            "sub": user_id,
-            "email": user.get('email'),
-            "role": user_role
-        })
+        user_role = user.get("role", "student")
+        user_name = user.get("name", "")
+        token = create_access_token(
+            {
+                "sub": user_id,
+                "email": user.get("email"),
+                "role": user_role,
+                "name": user_name,
+            }
+        )
 
-        # If the user is a driver, create unique document for per day to track driver behavior 
-        if user_role == 'driver':
-            
-            # Create unique ID using email + data
-            date_str = datetime.now().strftime('%Y-%m-%d')
+        db.collection("users").document(user_id).set(
+            {"last_login_at": datetime.now().isoformat()},
+            merge=True,
+        )
+
+        if user_role == "driver":
+            date_str = datetime.now().strftime("%Y-%m-%d")
             doc_id = f"{user.get('email')}_{date_str}"
-            doc_ref = db.collection('driver_behavior_logs').document(doc_id)
-            
-            doc = doc_ref.get()
-            if not doc.exists:
-                doc_ref.set({
-                    'email': user.get('email'),
-                    'date': date_str,
-                    'number_of_ywan': 0,
-                    'number_of_usephone': 0,
-                    'number_of_drowsiness': 0,
-                    'safety_score': 100
-                })
-            
-            # Spawn the camera tracking python script natively without blocking
-            script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'driver_camera.py')
-            subprocess.Popen([sys.executable, script_path, user.get('email')])
+            doc_ref = db.collection("driver_behavior_logs").document(doc_id)
+
+            if not doc_ref.get().exists:
+                doc_ref.set(
+                    {
+                        "email": user.get("email"),
+                        "date": date_str,
+                        "number_of_ywan": 0,
+                        "number_of_usephone": 0,
+                        "number_of_drowsiness": 0,
+                        "safety_score": 100,
+                    }
+                )
+
+            script_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "driver_camera.py",
+            )
+            subprocess.Popen([sys.executable, script_path, user.get("email")])
 
         return {
             "message": "Login successful",
+            "access_token": token,
             "token": token,
-            "role": user.get('role', 'student'),
-            "name": user.get('name', '')
+            "token_type": "bearer",
+            "user_id": user_id,
+            "email": user.get("email"),
+            "role": user_role,
+            "name": user_name,
+            "status": user_status,
         }
     except HTTPException:
         raise

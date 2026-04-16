@@ -5,7 +5,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/app_state_provider.dart';
+import '../../widgets/theme_toggle_button.dart';
 import 'login_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -19,14 +22,14 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
-  final _nameCtrl     = TextEditingController();
-  final _emailCtrl    = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  final _formKey      = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
 
   bool _obscurePassword = true;
-  bool _isLoading       = false;
-  
+  bool _isLoading = false;
+
   String _selectedRole = 'student'; // Defaults to student
 
   @override
@@ -40,22 +43,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    
+
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim().toLowerCase();
     final password = _passwordCtrl.text;
 
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'email': email,
-          'password': password,
-          'role': _selectedRole,
-          'name': name
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/auth/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'email': email,
+              'password': password,
+              'role': _selectedRole,
+              'name': name
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -63,21 +68,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (res.statusCode == 200 || res.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Account created! Please log in.', style: GoogleFonts.inter(color: Colors.white)),
+            content: Text('Account created! Please log in.',
+                style: GoogleFonts.inter(color: AppTheme.onAccent)),
             backgroundColor: AppTheme.positive,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+            shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
           ),
         );
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       } else {
-        final err = Map<String, dynamic>.from(json.decode(res.body))['detail'] ?? 'Registration failed';
+        final err =
+            Map<String, dynamic>.from(json.decode(res.body))['detail'] ??
+                'Registration failed';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(err, style: GoogleFonts.inter(color: Colors.white)),
+            content: Text(err, style: GoogleFonts.inter(color: AppTheme.onAccent)),
             backgroundColor: AppTheme.danger,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+            shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
           ),
         );
       }
@@ -86,10 +95,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('API Offline: Start Python Server', style: GoogleFonts.inter(color: Colors.white)),
+          content: Text('API Offline: Start Python Server',
+              style: GoogleFonts.inter(color: AppTheme.onAccent)),
           backgroundColor: AppTheme.danger,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+          shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
         ),
       );
     }
@@ -97,6 +107,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch provider to rebuild on theme toggle
+    context.watch<AppStateProvider>();
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
@@ -115,7 +127,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
                       ),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                      icon: Icon(Icons.arrow_back_ios_new_rounded,
                           color: AppTheme.textSecondary, size: 20),
                       style: IconButton.styleFrom(
                         backgroundColor: AppTheme.surfaceHigh,
@@ -123,6 +135,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             borderRadius: AppTheme.chipRadius),
                       ),
                     ),
+                    const SizedBox(width: 14),
+                    const ThemeToggleButton(),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -152,36 +166,42 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 40),
 
                 // ── Full Name ─────────────────────────────────
-                _Label('Full Name'),
+                const _Label('Full Name'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _nameCtrl,
                   keyboardType: TextInputType.name,
-                  style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary, fontSize: 14),
                   decoration: _inputDeco(
                     hint: 'e.g. John Doe',
                     icon: Icons.person_outline_rounded,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Enter your full name';
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Enter your full name';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
 
                 // ── Email ─────────────────────────────────────
-                _Label('Email Address'),
+                const _Label('Email Address'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary, fontSize: 14),
                   decoration: _inputDeco(
                     hint: 'e.g. student@shuttle.lk',
                     icon: Icons.email_outlined,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Enter your email';
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Enter your email';
+                    }
                     if (!v.contains('@')) return 'Enter a valid email';
                     return null;
                   },
@@ -189,17 +209,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 20),
 
                 // ── Role Selection ────────────────────────────
-                _Label('Select Your Account Type'),
+                const _Label('Select Your Account Type'),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _selectedRole,
+                  initialValue: _selectedRole,
                   dropdownColor: AppTheme.surfaceHigh,
-                  style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary, fontSize: 14),
                   decoration: _inputDeco(hint: '', icon: Icons.badge_outlined),
                   items: const [
-                    DropdownMenuItem(value: 'student', child: Text('Student Route User')),
-                    DropdownMenuItem(value: 'driver', child: Text('Shuttle Driver')),
-                    DropdownMenuItem(value: 'admin', child: Text('Network Admin')),
+                    DropdownMenuItem(
+                        value: 'student', child: Text('Student Route User')),
+                    DropdownMenuItem(
+                        value: 'driver', child: Text('Shuttle Driver')),
+                    DropdownMenuItem(
+                        value: 'admin', child: Text('Network Admin')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _selectedRole = v);
@@ -208,12 +232,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 const SizedBox(height: 20),
 
                 // ── Password ──────────────────────────────────
-                _Label('Password'),
+                const _Label('Password'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordCtrl,
                   obscureText: _obscurePassword,
-                  style: GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary, fontSize: 14),
                   decoration: _inputDeco(
                     hint: '••••••••',
                     icon: Icons.lock_outline_rounded,
@@ -232,7 +257,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter your password';
-                    if (v.length < 6) return 'Password must be at least 6 characters';
+                    if (v.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
@@ -246,18 +273,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
                       disabledBackgroundColor: AppTheme.accent.withOpacity(0.4),
-                      shape: RoundedRectangleBorder(
+                      shape: const RoundedRectangleBorder(
                         borderRadius: AppTheme.cardRadius,
                       ),
                       elevation: 0,
                     ),
                     child: _isLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 22,
                             height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              color: Colors.white,
+                              color: AppTheme.onAccent,
                             ),
                           )
                         : Text(
@@ -265,7 +292,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppTheme.onAccent,
                             ),
                           ),
                   ),
@@ -317,19 +344,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       border: OutlineInputBorder(
         borderRadius: AppTheme.inputRadius,
-        borderSide: const BorderSide(color: AppTheme.border),
+        borderSide: BorderSide(color: AppTheme.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: AppTheme.inputRadius,
-        borderSide: const BorderSide(color: AppTheme.border),
+        borderSide: BorderSide(color: AppTheme.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: AppTheme.inputRadius,
-        borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+        borderSide: BorderSide(color: AppTheme.accent, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: AppTheme.inputRadius,
-        borderSide: const BorderSide(color: AppTheme.danger),
+        borderSide: BorderSide(color: AppTheme.danger),
       ),
       errorStyle: GoogleFonts.inter(color: AppTheme.danger, fontSize: 11),
     );

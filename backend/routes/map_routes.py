@@ -56,14 +56,38 @@ def get_live_location(bus_id: str = "NB-2341"):
         doc = db.collection('LIVE-STATUS').document(bus_id).get()
         if doc.exists:
             data = doc.to_dict()
+            estimated_passenger_count_live = data.get(
+                "estimated_passenger_count_live",
+                data.get("estimated_passenger_count", data.get("passenger_count", 0)),
+            )
+            final_estimated_passenger_count = data.get(
+                "final_estimated_passenger_count",
+                data.get("estimated_passenger_count", estimated_passenger_count_live),
+            )
+            effective_estimated_count = (
+                final_estimated_passenger_count
+                if data.get("ai_state") in {"stopped", "completed", "failed"}
+                else estimated_passenger_count_live
+            )
+            peak_visible_count = data.get("peak_visible_count", effective_estimated_count)
             return {
                 "bus_id": bus_id,
                 "lat_percent": data.get("latitude", 0.5), # match frontend naming
                 "lng_percent": data.get("longitude", 0.5), 
                 "speed": data.get("speed", 0),
-                "available_seats": data.get("passenger_count", 0), # simplified
+                "available_seats": data.get("available_seats", 0),
                 "status": data.get("status", "idle"),
-                "eta_min": 7
+                "eta_min": 7,
+                "trip_id": data.get("trip_id"),
+                "trip_type": data.get("tripType"),
+                "passenger_count": effective_estimated_count,
+                "estimated_passenger_count": effective_estimated_count,
+                "estimated_passenger_count_live": estimated_passenger_count_live,
+                "final_estimated_passenger_count": final_estimated_passenger_count,
+                "peak_visible_count": peak_visible_count,
+                "current_detected_count": data.get("current_detected_count", 0),
+                "ai_state": data.get("ai_state", "idle"),
+                "last_updated": data.get("last_updated"),
             }
         return {
             "bus_id": bus_id,
@@ -72,7 +96,17 @@ def get_live_location(bus_id: str = "NB-2341"):
             "speed": 0,
             "available_seats": 0,
             "status": "offline",
-            "eta_min": 10
+            "eta_min": 10,
+            "trip_id": None,
+            "trip_type": None,
+            "passenger_count": 0,
+            "estimated_passenger_count": 0,
+            "estimated_passenger_count_live": 0,
+            "final_estimated_passenger_count": 0,
+            "peak_visible_count": 0,
+            "current_detected_count": 0,
+            "ai_state": "offline",
+            "last_updated": None,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

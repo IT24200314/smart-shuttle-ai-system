@@ -154,7 +154,7 @@ class _AlertCardState extends State<AlertCard>
                         ? color.withOpacity(0.15)
                         : AppTheme.surfaceHigh,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(
+                    shape: const RoundedRectangleBorder(
                       borderRadius: AppTheme.chipRadius,
                     ),
                   ),

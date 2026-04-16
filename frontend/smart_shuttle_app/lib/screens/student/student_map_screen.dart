@@ -9,8 +9,10 @@ import '../../theme/app_theme.dart';
 import '../../providers/app_state_provider.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/crowd_density_badge.dart';
+import '../../widgets/theme_toggle_button.dart';
 import '../../utils/api_config.dart';
 import 'student_lost_found_screen.dart';
+import 'student_feedback_screen.dart';
 
 class StudentMapScreen extends StatefulWidget {
   const StudentMapScreen({super.key});
@@ -28,8 +30,10 @@ class _StudentMapScreenState extends State<StudentMapScreen>
   Offset _busPos = const Offset(0.10, 0.70); // Default to start
   String _busId = 'NB-2341';
   int _currentSpeed = 0;
-  int _freeSeats = 15;
   String _stopStatus = 'En route';
+  String? _feedbackTripId;
+  String? _feedbackTripType;
+  String? _feedbackTripEndedAt;
 
   String _selectedRoute = 'Route A — Main Gate';
   final List<String> _routes = [
@@ -63,15 +67,25 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _fetchLiveLocation(); // initial
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (t) => _fetchLiveLocation());
+    _refreshStudentData();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (t) => _refreshStudentData(),
+    );
+  }
+
+  Future<void> _refreshStudentData() async {
+    await _fetchLiveLocation();
+    await _fetchFeedbackEligibility();
   }
 
   Future<void> _fetchLiveLocation() async {
     try {
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/map/live-location'),
-      ).timeout(const Duration(seconds: 2));
+      final res = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/map/live-location'),
+          )
+          .timeout(const Duration(seconds: 2));
 
       if (res.statusCode == 200 && mounted) {
         final data = Map<String, dynamic>.from(json.decode(res.body));
@@ -82,9 +96,8 @@ class _StudentMapScreenState extends State<StudentMapScreen>
           );
           _busId = data['bus_id'] ?? 'NB-2341';
           _currentSpeed = data['speed'] ?? 0;
-          _freeSeats = data['available_seats'] ?? 0;
           _stopStatus = data['status'] ?? 'Active';
-          
+
           // Sync ETA if provided by backend
           if (data['eta_min'] != null) {
             context.read<AppStateProvider>().setEta(data['eta_min']);
@@ -93,6 +106,53 @@ class _StudentMapScreenState extends State<StudentMapScreen>
       }
     } catch (_) {
       // Fail silently for polling
+    }
+  }
+
+  Future<void> _fetchFeedbackEligibility() async {
+    final appState = context.read<AppStateProvider>();
+    final token = appState.jwtToken;
+    if (token == null ||
+        token.isEmpty ||
+        appState.currentRole != UserRole.student) {
+      if (!mounted) return;
+      setState(() {
+        _feedbackTripId = null;
+        _feedbackTripType = null;
+        _feedbackTripEndedAt = null;
+      });
+      return;
+    }
+
+    try {
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/feedback/eligible-trip'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 4));
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final data = Map<String, dynamic>.from(json.decode(res.body));
+        setState(() {
+          _feedbackTripId = data['trip_id']?.toString();
+          _feedbackTripType = data['trip_type']?.toString();
+          _feedbackTripEndedAt = data['actual_end_time']?.toString();
+        });
+      } else {
+        setState(() {
+          _feedbackTripId = null;
+          _feedbackTripType = null;
+          _feedbackTripEndedAt = null;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _feedbackTripId = null;
+        _feedbackTripType = null;
+        _feedbackTripEndedAt = null;
+      });
     }
   }
 
@@ -111,11 +171,46 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     return Offset.lerp(_waypoints[seg], _waypoints[seg + 1], frac)!;
   }
 
+  void _openFeedback() {
+    if (_feedbackTripId == null || _feedbackTripId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Feedback becomes available after the most recently completed trip.',
+            style: GoogleFonts.inter(color: AppTheme.onAccent),
+          ),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentFeedbackScreen(
+          tripId: _feedbackTripId!,
+          tripType: _feedbackTripType,
+          completedAt: _feedbackTripEndedAt,
+        ),
+      ),
+    );
+  }
+
+  void _openLostFound() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StudentLostFoundScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Watch provider to rebuild on theme toggle
+    context.watch<AppStateProvider>();
     final provider = context.watch<AppStateProvider>();
     final size = MediaQuery.of(context).size;
-    final mapH = size.height * 0.50;   // slightly shorter to leave more room for bottom sheet
+    final mapH = size.height * (size.width < 700 ? 0.46 : 0.56);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -123,7 +218,7 @@ class _StudentMapScreenState extends State<StudentMapScreen>
         backgroundColor: AppTheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: AppTheme.textSecondary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
@@ -141,28 +236,11 @@ class _StudentMapScreenState extends State<StudentMapScreen>
           ],
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: TextButton.icon(
-              icon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 14),
-              label: Text('Lost & Found',
-                  style: GoogleFonts.inter(
-                      color: AppTheme.accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-              style: TextButton.styleFrom(
-                backgroundColor: AppTheme.accent.withOpacity(0.10),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
-              ),
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const StudentLostFoundScreen())),
-            ),
-          ),
+          const ThemeToggleButton(compact: true),
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded,
+            icon: Icon(Icons.refresh_rounded,
                 color: AppTheme.textSecondary, size: 20),
-            onPressed: () {},
+            onPressed: _refreshStudentData,
           ),
           const SizedBox(width: 8),
         ],
@@ -171,17 +249,19 @@ class _StudentMapScreenState extends State<StudentMapScreen>
         children: [
           // ── Map Background ──────────────────────────────────
           Positioned(
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             height: mapH,
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF0E1825),
-                    Color(0xFF101B30),
-                    Color(0xFF0B1520),
+                    AppTheme.background,
+                    AppTheme.surface,
+                    AppTheme.background,
                   ],
                 ),
               ),
@@ -191,7 +271,9 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
           // ── Route Polyline ──────────────────────────────────
           Positioned(
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             height: mapH,
             child: CustomPaint(
               painter: _RoutePainter(
@@ -211,7 +293,9 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
           // ── Bottom Info Sheet ───────────────────────────────
           Positioned(
-            left: 0, right: 0, bottom: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: _BottomSheet(
               provider: provider,
               selectedRoute: _selectedRoute,
@@ -219,8 +303,11 @@ class _StudentMapScreenState extends State<StudentMapScreen>
               onRouteChanged: (r) => setState(() => _selectedRoute = r!),
               busId: _busId,
               currentSpeed: _currentSpeed,
-              freeSeats: _freeSeats,
               stopStatus: _stopStatus,
+              feedbackTripId: _feedbackTripId,
+              feedbackTripType: _feedbackTripType,
+              onOpenFeedback: _openFeedback,
+              onOpenLostFound: _openLostFound,
             ),
           ),
         ],
@@ -234,16 +321,16 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final roadPaint = Paint()
-      ..color = const Color(0xFF1E3050)
+      ..color = AppTheme.borderStrong
       ..strokeWidth = 12
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     final minorPaint = Paint()
-      ..color = const Color(0xFF172540)
+      ..color = AppTheme.border
       ..strokeWidth = 5
       ..style = PaintingStyle.stroke;
     final blockPaint = Paint()
-      ..color = const Color(0xFF131E35)
+      ..color = AppTheme.surfaceHigh
       ..style = PaintingStyle.fill;
 
     final rng = Random(42);
@@ -340,8 +427,7 @@ class _BusMarker extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.positive
-                    .withOpacity(0.12 * pulseAnim.value),
+                color: AppTheme.positive.withOpacity(0.12 * pulseAnim.value),
               ),
             ),
             Container(
@@ -357,8 +443,8 @@ class _BusMarker extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.directions_bus_rounded,
-                  color: Colors.white, size: 16),
+              child: Icon(Icons.directions_bus_rounded,
+                  color: AppTheme.onPositive, size: 16),
             ),
           ],
         ),
@@ -375,8 +461,11 @@ class _BottomSheet extends StatelessWidget {
   final ValueChanged<String?> onRouteChanged;
   final String busId;
   final int currentSpeed;
-  final int freeSeats;
   final String stopStatus;
+  final String? feedbackTripId;
+  final String? feedbackTripType;
+  final VoidCallback onOpenFeedback;
+  final VoidCallback onOpenLostFound;
 
   const _BottomSheet({
     required this.provider,
@@ -385,235 +474,215 @@ class _BottomSheet extends StatelessWidget {
     required this.onRouteChanged,
     required this.busId,
     required this.currentSpeed,
-    required this.freeSeats,
     required this.stopStatus,
+    required this.feedbackTripId,
+    required this.feedbackTripType,
+    required this.onOpenFeedback,
+    required this.onOpenLostFound,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Drag handle
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.border,
-                borderRadius: BorderRadius.circular(2),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-
-            // Route Selector
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: DropdownButtonFormField<String>(
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
                 initialValue: selectedRoute,
                 dropdownColor: AppTheme.surfaceHigh,
-                isExpanded: true, // ← Prevents dropdown overflow
+                isExpanded: true,
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.route_rounded,
+                  prefixIcon: Icon(Icons.route_rounded,
                       color: AppTheme.positive, size: 17),
-                  hintText: 'Select route',
-                  hintStyle: GoogleFonts.inter(
-                      color: AppTheme.textMuted, fontSize: 12),
-                  filled: true,
-                  fillColor: AppTheme.surfaceHigh,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: AppTheme.inputRadius,
-                    borderSide:
-                        const BorderSide(color: AppTheme.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: AppTheme.inputRadius,
-                    borderSide:
-                        const BorderSide(color: AppTheme.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppTheme.inputRadius,
-                    borderSide: const BorderSide(
-                        color: AppTheme.accent, width: 1.5),
-                  ),
+                  labelText: 'Route',
                 ),
                 items: routes
                     .map((r) => DropdownMenuItem(
                           value: r,
-                          child: Text(r,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textPrimary,
-                                  fontSize: 13)),
+                          child: Text(
+                            r,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textPrimary, fontSize: 13),
+                          ),
                         ))
                     .toList(),
                 onChanged: onRouteChanged,
               ),
-            ),
-            const SizedBox(height: 12),
-
-            // ETA + Crowd Row — ETA is hero, crowd is secondary
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ETA Card — Expanded takes remaining space
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(14),
+              const SizedBox(height: 10),
+              GlassCard(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time_rounded,
-                                  color: AppTheme.positive, size: 13),
-                              const SizedBox(width: 5),
-                              Text('ETA',
-                                  style: GoogleFonts.inter(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 11)),
-                            ],
-                          ),
+                          Text('Estimated Arrival',
+                              style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary, fontSize: 11)),
                           const SizedBox(height: 6),
-                          // Rule 2: big number = main data
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text('${provider.etaMinutes}',
                                   style: GoogleFonts.inter(
                                     color: AppTheme.textPrimary,
-                                    fontSize: 36,
+                                    fontSize: 34,
                                     fontWeight: FontWeight.w800,
-                                    letterSpacing: -1,
                                     height: 1,
                                   )),
                               const SizedBox(width: 4),
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
+                                padding: const EdgeInsets.only(bottom: 5),
                                 child: Text('min',
                                     style: GoogleFonts.inter(
                                       color: AppTheme.textSecondary,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
                                     )),
                               ),
                             ],
                           ),
-                          Text('to Main Gate Stop',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 4),
+                          Text('to Main Gate stop',
                               style: GoogleFonts.inter(
-                                  color: AppTheme.textMuted, fontSize: 10)),
+                                  color: AppTheme.textMuted, fontSize: 11)),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Crowd Card — Responsive width, expanded
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Crowd Level',
-                              maxLines: 1,
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 11)),
-                          const SizedBox(height: 8),
-                          CrowdDensityBadge(density: provider.crowdDensity),
-                          const SizedBox(height: 10),
-                          // Crowd selector buttons
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: CrowdDensity.values.map((d) {
-                              final selected = provider.crowdDensity == d;
-                              return GestureDetector(
-                                onTap: () => context
-                                    .read<AppStateProvider>()
-                                    .setCrowdDensity(d),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 7, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? AppTheme.positive
-                                            .withOpacity(0.18)
-                                        : AppTheme.surfaceHigh,
-                                    borderRadius: AppTheme.chipRadius,
-                                    border: Border.all(
-                                      color: selected
-                                          ? AppTheme.positive
-                                              .withOpacity(0.6)
-                                          : AppTheme.border,
-                                    ),
-                                  ),
-                                  child: Text(d.name[0].toUpperCase(),
-                                      style: GoogleFonts.inter(
-                                        color: selected
-                                            ? AppTheme.positive
-                                            : AppTheme.textMuted,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      )),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Crowd',
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary, fontSize: 11)),
+                        const SizedBox(height: 8),
+                        CrowdDensityBadge(density: provider.crowdDensity),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Bus Info Bar — Flexible chips prevent overflow on narrow screens
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: GlassCard(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _InfoChip(icon: Icons.confirmation_number_rounded,
-                        label: 'Bus', value: busId),
-                    const _Vdivider(),
-                    _InfoChip(icon: Icons.speed_rounded,
-                        label: 'Speed', value: '$currentSpeed km/h'),
-                    const _Vdivider(),
-                    _InfoChip(icon: Icons.people_rounded,
-                        label: 'Seats', value: '$freeSeats free'),
-                    const _Vdivider(),
-                    _InfoChip(icon: Icons.location_on_rounded,
-                        label: 'Stop', value: stopStatus),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              GlassCard(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _InfoChip(
+                        icon: Icons.confirmation_number_rounded,
+                        label: 'Bus',
+                        value: busId),
+                    _InfoChip(
+                        icon: Icons.speed_rounded,
+                        label: 'Speed',
+                        value: '$currentSpeed km/h'),
+                    _InfoChip(
+                        icon: Icons.location_on_rounded,
+                        label: 'Status',
+                        value: stopStatus),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth > 420;
+                  final feedbackButton = ElevatedButton.icon(
+                    onPressed: onOpenFeedback,
+                    icon: const Icon(Icons.rate_review_rounded, size: 18),
+                    label: Text(
+                      feedbackTripId == null
+                          ? 'Feedback Unavailable'
+                          : 'Rate Latest Trip',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: feedbackTripId == null
+                          ? AppTheme.surfaceHigh
+                          : AppTheme.accent,
+                      foregroundColor: feedbackTripId == null
+                          ? AppTheme.textSecondary
+                          : AppTheme.onAccent,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  );
+
+                  final lostFoundButton = OutlinedButton.icon(
+                    onPressed: onOpenLostFound,
+                    icon: const Icon(Icons.search_rounded, size: 18),
+                    label: Text(
+                      'Lost & Found',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  );
+
+                  if (!isWide) {
+                    return Column(
+                      children: [
+                        SizedBox(width: double.infinity, child: feedbackButton),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                            width: double.infinity, child: lostFoundButton),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: feedbackButton),
+                      const SizedBox(width: 8),
+                      Expanded(child: lostFoundButton),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              Text(
+                feedbackTripId == null
+                    ? 'Feedback opens after your latest completed trip is posted.'
+                    : 'Feedback target: ${feedbackTripType ?? 'Completed Trip'}',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -629,27 +698,34 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppTheme.positive, size: 14),
-        const SizedBox(height: 3),
-        Text(value,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: AppTheme.chipRadius,
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.positive, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            '$label: ',
+            style: GoogleFonts.inter(
+                color: AppTheme.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600),
+          ),
+          Text(
+            value,
             style: GoogleFonts.inter(
                 color: AppTheme.textPrimary,
                 fontSize: 11,
-                fontWeight: FontWeight.w700)),
-        Text(label,
-            style: GoogleFonts.inter(
-                color: AppTheme.textSecondary, fontSize: 9)),
-      ],
+                fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
     );
   }
-}
-
-class _Vdivider extends StatelessWidget {
-  const _Vdivider();
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 1, height: 28, color: AppTheme.border);
 }

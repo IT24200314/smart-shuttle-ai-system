@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import dashboard_routes, driver_routes, auth_routes, lost_found_routes, map_routes, admin_routes
+from routes import dashboard_routes, driver_routes, auth_routes, lost_found_routes, map_routes, admin_routes, user_routes, feedback_routes
 
 app = FastAPI(title="Smart Shuttle Operations API")
 
@@ -19,6 +19,8 @@ app.include_router(auth_routes.router)
 app.include_router(lost_found_routes.router)
 app.include_router(map_routes.router)
 app.include_router(admin_routes.router)
+app.include_router(user_routes.router)
+app.include_router(feedback_routes.router)
 
 @app.get("/")
 def read_root():

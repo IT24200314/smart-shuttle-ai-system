@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';    // For playing alert sounds
+import 'package:audioplayers/audioplayers.dart'; // For playing alert sounds
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum CrowdDensity { low, medium, high }
 
@@ -9,6 +10,55 @@ enum UserRole { student, driver, admin }
 class AppStateProvider extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
+  static const String _themePrefKey = 'smart_shuttle_theme_mode';
+
+  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode get themeMode => _themeMode;
+
+  bool get isDarkMode => _themeMode == ThemeMode.dark;
+
+  /// Call once at startup to load the persisted theme preference.
+  Future<void> init() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedTheme = prefs.getString(_themePrefKey);
+      if (savedTheme == 'light') {
+        _themeMode = ThemeMode.light;
+      } else {
+        _themeMode = ThemeMode.dark;
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load theme preference: $e');
+    }
+  }
+
+  void toggleThemeMode() {
+    _themeMode =
+        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    notifyListeners();
+    _persistTheme();
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
+    notifyListeners();
+    _persistTheme();
+  }
+
+  Future<void> _persistTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _themePrefKey,
+        _themeMode == ThemeMode.light ? 'light' : 'dark',
+      );
+    } catch (e) {
+      debugPrint('Failed to persist theme preference: $e');
+    }
+  }
+
   // ── Session & Auth ─────────────────────────────────────────
   String? _jwtToken;
   String? get jwtToken => _jwtToken;
@@ -16,9 +66,30 @@ class AppStateProvider extends ChangeNotifier {
   String? _userEmail;
   String? get userEmail => _userEmail;
 
-  void setSession(String? token, String? email) {
+  String? _userId;
+  String? get userId => _userId;
+
+  String? _userName;
+  String? get userName => _userName;
+
+  void setSession(
+    String? token,
+    String? email, {
+    String? userId,
+    String? userName,
+  }) {
     _jwtToken = token;
     _userEmail = email;
+    _userId = userId;
+    _userName = userName;
+    notifyListeners();
+  }
+
+  void clearSession() {
+    _jwtToken = null;
+    _userEmail = null;
+    _userId = null;
+    _userName = null;
     notifyListeners();
   }
 
