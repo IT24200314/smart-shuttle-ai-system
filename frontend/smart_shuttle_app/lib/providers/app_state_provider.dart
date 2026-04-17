@@ -90,6 +90,18 @@ class AppStateProvider extends ChangeNotifier {
     _userEmail = null;
     _userId = null;
     _userName = null;
+    _sessionActive = false;
+    _tripDurationSeconds = 0;
+    _isFirstSnapshot = true;
+    _prevYawnCount = 0;
+    _prevPhoneCount = 0;
+    _prevDrowsinessCount = 0;
+    _yawnAlert = false;
+    _phoneUseAlert = false;
+    _drowsinessAlert = false;
+    _yawnClearTimer?.cancel();
+    _phoneUseClearTimer?.cancel();
+    _drowsinessClearTimer?.cancel();
     notifyListeners();
   }
 
@@ -123,20 +135,30 @@ class AppStateProvider extends ChangeNotifier {
   }
 
   void toggleSession() {
-    _sessionActive = !_sessionActive;
     if (_sessionActive) {
-      _isFirstSnapshot = true;
+      endDriverSession();
     } else {
-      _tripDurationSeconds = 0;
-      // Keep safety score in-sync with the database, do not reset to 100 here.
-      _drowsinessAlert = false;
-      _phoneUseAlert = false;
-      _yawnAlert = false;
-      // Cancel any pending timers
-      _yawnClearTimer?.cancel();
-      _phoneUseClearTimer?.cancel();
-      _drowsinessClearTimer?.cancel();
+      beginDriverSession();
     }
+  }
+
+  void beginDriverSession() {
+    _sessionActive = true;
+    _tripDurationSeconds = 0;
+    _isFirstSnapshot = true;
+    notifyListeners();
+  }
+
+  void endDriverSession() {
+    _sessionActive = false;
+    _tripDurationSeconds = 0;
+    // Keep safety score in-sync with the database, do not reset to 100 here.
+    _drowsinessAlert = false;
+    _phoneUseAlert = false;
+    _yawnAlert = false;
+    _yawnClearTimer?.cancel();
+    _phoneUseClearTimer?.cancel();
+    _drowsinessClearTimer?.cancel();
     notifyListeners();
   }
 

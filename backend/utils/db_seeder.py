@@ -10,11 +10,12 @@ from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 
-SEED_TAG = "smart_shuttle_demo_v3"
+SEED_TAG = "smart_shuttle_demo_v4"
 DEMO_PASSWORD = "password"
-DAYS_TO_SEED = 90
+DAYS_TO_SEED = 30
 FIXED_TRIP_COST = 4000
 BASE_NOW = datetime.now().replace(microsecond=0)
+KNOWN_DOC_CLEANUP_DAYS = 365
 
 
 ACTIVE_RESET_COLLECTIONS = [
@@ -69,73 +70,8 @@ def _feedback_doc_id(trip_id: str, student_id: str) -> str:
     return f"FBK-{digest[:12].upper()}"
 
 
-def _delete_seeded_documents(collection_name: str) -> int:
-    deleted = 0
-    docs = (
-        db.collection(collection_name)
-        .where(filter=FieldFilter("seed_source", "==", SEED_TAG))
-        .stream()
-    )
-    for doc in docs:
-        doc.reference.delete()
-        deleted += 1
-    return deleted
-
-
-def _delete_all_documents(collection_name: str) -> int:
-    deleted = 0
-    for doc in db.collection(collection_name).stream():
-        doc.reference.delete()
-        deleted += 1
-    return deleted
-
-
-def reset_demo_database(
-    *,
-    reset_mode: str = "full",
-    delete_legacy: bool = True,
-) -> dict[str, dict[str, int]]:
-    print("Stage 1: Cleaning demo collections...")
-    active_counts: dict[str, int] = {}
-    legacy_counts: dict[str, int] = {}
-
-    for collection_name in ACTIVE_RESET_COLLECTIONS:
-        deleted = (
-            _delete_all_documents(collection_name)
-            if reset_mode == "full"
-            else _delete_seeded_documents(collection_name)
-        )
-        active_counts[collection_name] = deleted
-        if deleted:
-            print(f"  - {collection_name}: removed {deleted} document(s)")
-
-    if delete_legacy:
-        print("Stage 1b: Removing legacy demo-only collections...")
-        for collection_name in LEGACY_COLLECTIONS:
-            deleted = _delete_all_documents(collection_name)
-            legacy_counts[collection_name] = deleted
-            if deleted:
-                print(f"  - {collection_name}: removed {deleted} document(s)")
-
-    print("Cleanup complete.\n")
-    return {
-        "active": active_counts,
-        "legacy": legacy_counts,
-    }
-
-
-def upsert_document(collection_name: str, doc_id: str, payload: dict, counts: dict) -> None:
-    db.collection(collection_name).document(doc_id).set(payload)
-    counts[collection_name] = counts.get(collection_name, 0) + 1
-
-
-def seed_core_documents() -> tuple[dict, list[dict]]:
-    print("Stage 2: Upserting auth users, routes, settings, and live status...")
-    counts: dict[str, int] = {}
-    password_hash = _get_password_hash(DEMO_PASSWORD)
-    created_at = BASE_NOW.isoformat()
-
-    user_records = [
+def _build_user_records() -> list[dict]:
+    return [
         {
             "id": "admin-01",
             "email": "admin@shuttle.lk",
@@ -250,6 +186,211 @@ def seed_core_documents() -> tuple[dict, list[dict]]:
         },
     ]
 
+
+def _delete_seeded_documents(collection_name: str) -> int:
+    deleted = 0
+    docs = (
+        db.collection(collection_name)
+        .where(filter=FieldFilter("seed_source", "==", SEED_TAG))
+        .stream()
+    )
+    for doc in docs:
+        doc.reference.delete()
+        deleted += 1
+    return deleted
+
+
+def _delete_all_documents(collection_name: str) -> int:
+    deleted = 0
+    for doc in db.collection(collection_name).stream():
+        doc.reference.delete()
+        deleted += 1
+    return deleted
+
+
+def _build_known_demo_document_plan(days_to_cover: int) -> dict[str, set[str]]:
+    plan: dict[str, set[str]] = {
+        collection_name: set() for collection_name in ACTIVE_RESET_COLLECTIONS
+    }
+
+    for user in _build_user_records():
+        plan["users"].add(user["id"])
+
+    plan["ticket_prices"].add("standard_fares")
+    plan["admin_settings"].add("global_config")
+    plan["bus_routes"].update({"RT-001", "RT-002"})
+    plan["LIVE-STATUS"].update({"NB-2341", "NB-4512", "NB-7834"})
+
+    buses = ["NB-2341", "NB-4512", "NB-7834"]
+    drivers = ["driver-01", "driver-02"]
+    driver_directory = {
+        "driver-01": {
+            "email": "driver@shuttle.lk",
+            "name": "Kamal Perera",
+        },
+        "driver-02": {
+            "email": "driver2@shuttle.lk",
+            "name": "Sahan Jayasuriya",
+        },
+    }
+    active_students = [
+        "student-01",
+        "student-02",
+        "student-03",
+        "student-04",
+        "student-05",
+        "student-06",
+        "student-07",
+    ]
+
+    for day_offset in range(days_to_cover - 1, -1, -1):
+        trip_date = (BASE_NOW - timedelta(days=day_offset)).date()
+        date_str = trip_date.isoformat()
+        weekday = trip_date.weekday()
+        day_rng = _seed_random("day", date_str)
+        profiles = _demand_profiles(day_offset, weekday, day_rng)
+
+        for trip_index, profile in enumerate(profiles):
+            segment = profile["segment"]
+            trip_type = profile["trip_type"]
+            ai_passengers = profile["ai_passengers"]
+            sold_tickets = profile["sold_tickets"]
+            bus_id = buses[(day_offset + trip_index) % len(buses)]
+            driver_id = drivers[(day_offset + trip_index) % len(drivers)]
+            trip_id = f"SEED-TRIP-{trip_date.strftime('%Y%m%d')}-{segment}"
+
+            plan["trips"].add(trip_id)
+            for log_index in range(1, 4):
+                plan["passenger_logs"].add(
+                    f"SEED-PLOG-{trip_date.strftime('%Y%m%d')}-{segment}-{log_index}"
+                )
+
+            actual_revenue_weights = _ticket_mix(sold_tickets, trip_type, weekday)
+            actual_revenue = (
+                actual_revenue_weights["tickets_75"] * 75
+                + actual_revenue_weights["tickets_100"] * 100
+                + actual_revenue_weights["tickets_150"] * 150
+                + actual_revenue_weights["tickets_200"] * 200
+            )
+            unpaid = max(ai_passengers - sold_tickets, 0)
+            profit_or_loss = round(actual_revenue - FIXED_TRIP_COST, 2)
+
+            if profit_or_loss >= 800 and unpaid <= 4:
+                ride_quality = "great"
+            elif profit_or_loss >= -900 and unpaid <= 9:
+                ride_quality = "mixed"
+            else:
+                ride_quality = "bad"
+
+            feedback_records = _build_feedback_records(
+                trip_id=trip_id,
+                trip_type=trip_type,
+                trip_status="completed",
+                ride_quality=ride_quality,
+                candidate_students=active_students,
+            )
+            for feedback_record in feedback_records:
+                plan["feedback"].add(feedback_record["id"])
+
+            should_raise_leakage_alert = trip_type == "Evening" and unpaid >= 8
+            should_raise_low_demand_alert = sold_tickets <= 18 or profit_or_loss < -1700
+            if should_raise_leakage_alert or should_raise_low_demand_alert:
+                plan["alert_history"].add(
+                    f"SEED-ALERT-{trip_date.strftime('%Y%m%d')}-{segment}"
+                )
+
+        if day_offset < 14:
+            for point_index in range(3):
+                plan["gps_tracking_history"].add(
+                    f"SEED-GPS-{trip_date.strftime('%Y%m%d')}-{point_index + 1}"
+                )
+
+        if day_offset % 12 == 0:
+            plan["lost_found_items"].add(f"SEED-LF-{trip_date.strftime('%Y%m%d')}")
+            plan["lost_found_claim_requests"].add(
+                f"SEED-CLM-{trip_date.strftime('%Y%m%d')}"
+            )
+
+        for driver_id, driver_profile in driver_directory.items():
+            _ = driver_id
+            plan["driver_behavior_logs"].add(f"{driver_profile['email']}_{date_str}")
+
+    return plan
+
+
+def _delete_known_demo_documents(days_to_cover: int) -> dict[str, int]:
+    plan = _build_known_demo_document_plan(days_to_cover)
+    counts: dict[str, int] = {}
+    for collection_name, doc_ids in plan.items():
+        attempted = 0
+        for doc_id in sorted(doc_ids):
+            db.collection(collection_name).document(doc_id).delete()
+            attempted += 1
+        counts[collection_name] = attempted
+        if attempted:
+            print(
+                f"  - {collection_name}: attempted deterministic cleanup of "
+                f"{attempted} document(s)"
+            )
+    return counts
+
+
+def reset_demo_database(
+    *,
+    reset_mode: str = "full",
+    delete_legacy: bool = True,
+    known_doc_window_days: int = KNOWN_DOC_CLEANUP_DAYS,
+) -> dict[str, dict[str, int]]:
+    print("Stage 1: Cleaning demo collections...")
+    active_counts: dict[str, int] = {}
+    legacy_counts: dict[str, int] = {}
+
+    if reset_mode == "known-docs":
+        active_counts = _delete_known_demo_documents(known_doc_window_days)
+    else:
+        for collection_name in ACTIVE_RESET_COLLECTIONS:
+            deleted = (
+                _delete_all_documents(collection_name)
+                if reset_mode == "full"
+                else _delete_seeded_documents(collection_name)
+            )
+            active_counts[collection_name] = deleted
+            if deleted:
+                print(f"  - {collection_name}: removed {deleted} document(s)")
+
+    if delete_legacy and reset_mode != "known-docs":
+        print("Stage 1b: Removing legacy demo-only collections...")
+        for collection_name in LEGACY_COLLECTIONS:
+            deleted = _delete_all_documents(collection_name)
+            legacy_counts[collection_name] = deleted
+            if deleted:
+                print(f"  - {collection_name}: removed {deleted} document(s)")
+    elif delete_legacy and reset_mode == "known-docs":
+        print(
+            "Stage 1b: Skipping legacy collection cleanup because "
+            "known-docs mode avoids read-heavy collection scans."
+        )
+
+    print("Cleanup complete.\n")
+    return {
+        "active": active_counts,
+        "legacy": legacy_counts,
+    }
+
+
+def upsert_document(collection_name: str, doc_id: str, payload: dict, counts: dict) -> None:
+    db.collection(collection_name).document(doc_id).set(payload)
+    counts[collection_name] = counts.get(collection_name, 0) + 1
+
+
+def seed_core_documents() -> tuple[dict, list[dict]]:
+    print("Stage 2: Upserting auth users, routes, settings, and live status...")
+    counts: dict[str, int] = {}
+    password_hash = _get_password_hash(DEMO_PASSWORD)
+    created_at = BASE_NOW.isoformat()
+
+    user_records = _build_user_records()
+
     for user in user_records:
         upsert_document(
             "users",
@@ -342,6 +483,8 @@ def seed_core_documents() -> tuple[dict, list[dict]]:
                 "tripType": None,
                 "trip_id": None,
                 "driver_id": None,
+                "driver_email": None,
+                "driver_name": None,
                 "passenger_count": 0,
                 "current_detected_count": 0,
                 "peak_visible_count": 0,
@@ -463,12 +606,42 @@ def _build_feedback_records(
     return records
 
 
-def _demand_profiles(day_offset: int, weekday: int, rng: random.Random) -> list[dict]:
+def _day_scenario(day_offset: int, weekday: int) -> dict[str, object]:
     is_weekend = weekday >= 5
+    is_exam_week = day_offset % 21 < 7
+    is_semester_break = day_offset % 21 > 16
+    is_rainy_day = day_offset % 17 == 0
+    campus_event_day = weekday in {0, 2} and day_offset % 11 == 0
+
+    scenario_tags = ["weekend" if is_weekend else "weekday"]
+    if is_rainy_day:
+        scenario_tags.append("rainy-day")
+    if is_exam_week:
+        scenario_tags.append("exam-week")
+    elif is_semester_break:
+        scenario_tags.append("low-demand-break")
+    else:
+        scenario_tags.append("regular-academic-week")
+    if campus_event_day:
+        scenario_tags.append("campus-event")
+
+    return {
+        "is_weekend": is_weekend,
+        "is_exam_week": is_exam_week,
+        "is_semester_break": is_semester_break,
+        "is_rainy_day": is_rainy_day,
+        "campus_event_day": campus_event_day,
+        "scenario_tags": scenario_tags,
+    }
+
+
+def _demand_profiles(day_offset: int, weekday: int, rng: random.Random) -> list[dict]:
+    scenario = _day_scenario(day_offset, weekday)
+    is_weekend = bool(scenario["is_weekend"])
     weekend_penalty = 16 if weekday == 5 else 24 if weekday == 6 else 0
-    term_wave = 6 if day_offset % 21 < 7 else -4 if day_offset % 21 > 16 else 1
-    weather_penalty = 8 if day_offset % 17 == 0 else 0
-    campus_event_bonus = 5 if weekday in {0, 2} and day_offset % 11 == 0 else 0
+    term_wave = 6 if scenario["is_exam_week"] else -4 if scenario["is_semester_break"] else 1
+    weather_penalty = 8 if scenario["is_rainy_day"] else 0
+    campus_event_bonus = 5 if scenario["campus_event_day"] else 0
 
     morning_ai = max(
         22,
@@ -505,12 +678,14 @@ def _demand_profiles(day_offset: int, weekday: int, rng: random.Random) -> list[
             "trip_type": "Morning",
             "ai_passengers": morning_ai,
             "sold_tickets": min(morning_sold, morning_ai),
+            "scenario_tags": list(scenario["scenario_tags"]),
         },
         {
             "segment": "E",
             "trip_type": "Evening",
             "ai_passengers": evening_ai,
             "sold_tickets": min(evening_sold, evening_ai),
+            "scenario_tags": list(scenario["scenario_tags"]),
         },
     ]
 
@@ -521,6 +696,16 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
 
     buses = ["NB-2341", "NB-4512", "NB-7834"]
     drivers = ["driver-01", "driver-02"]
+    driver_directory = {
+        "driver-01": {
+            "email": "driver@shuttle.lk",
+            "name": "Kamal Perera",
+        },
+        "driver-02": {
+            "email": "driver2@shuttle.lk",
+            "name": "Sahan Jayasuriya",
+        },
+    }
     active_students = [
         "student-01",
         "student-02",
@@ -554,7 +739,9 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
             unpaid = max(ai_passengers - sold_tickets, 0)
             bus_id = buses[(day_offset + trip_index) % len(buses)]
             driver_id = drivers[(day_offset + trip_index) % len(drivers)]
+            driver_profile = driver_directory[driver_id]
             trip_id = f"SEED-TRIP-{trip_date.strftime('%Y%m%d')}-{segment}"
+            scenario_tags = list(profile.get("scenario_tags", []))
 
             trip_rng = _seed_random(trip_id)
             ticket_mix = _ticket_mix(sold_tickets, trip_type, weekday)
@@ -576,6 +763,11 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
                 ride_quality = "bad"
 
             start_time, end_time = _trip_times(trip_date, trip_type, trip_rng)
+            day_profile = (
+                "-".join(scenario_tags)
+                + ("-morning" if trip_type == "Morning" else "-evening")
+                + ("-loss" if profit_or_loss < 0 else "-profit")
+            )
             feedback_records = _build_feedback_records(
                 trip_id=trip_id,
                 trip_type=trip_type,
@@ -596,6 +788,8 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
                     "tripType": trip_type,
                     "status": "completed",
                     "driverId": driver_id,
+                    "driverEmail": driver_profile["email"],
+                    "driverName": driver_profile["name"],
                     "busId": bus_id,
                     "actualStartTime": start_time.isoformat(),
                     "actualEndTime": end_time.isoformat(),
@@ -615,6 +809,12 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
                     "tickets_100": ticket_mix["tickets_100"],
                     "tickets_150": ticket_mix["tickets_150"],
                     "tickets_200": ticket_mix["tickets_200"],
+                    "dayProfile": day_profile,
+                    "scenarioTags": [
+                        *scenario_tags,
+                        "morning" if trip_type == "Morning" else "evening",
+                        "loss" if profit_or_loss < 0 else "profit",
+                    ],
                     "created_at": start_time.isoformat(),
                     "updated_at": end_time.isoformat(),
                     "seed_source": SEED_TAG,
@@ -676,6 +876,7 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
                     {
                         "bus_id": bus_id,
                         "driver_id": driver_id,
+                        "driver_email": driver_profile["email"],
                         "type": alert_type,
                         "description": alert_description,
                         "status": alert_status,
@@ -733,24 +934,60 @@ def seed_operational_history(days_to_seed: int = DAYS_TO_SEED) -> dict[str, int]
                 counts,
             )
 
-        for driver_index, driver_email in enumerate(["driver@shuttle.lk", "driver2@shuttle.lk"]):
+        for driver_index, (driver_id, driver_profile) in enumerate(driver_directory.items()):
+            driver_email = driver_profile["email"]
             safety_rng = _seed_random("safety", driver_email, date_str)
-            yawn_count = safety_rng.randint(0, 2 if weekday < 5 else 3)
+            yawn_count = safety_rng.randint(0, 3 if weekday < 5 else 4)
             phone_count = 1 if (day_offset + driver_index) % 17 == 0 else 0
             drowsiness_count = 1 if (day_offset + driver_index) % 29 == 0 else 0
-            safety_score = max(72, 100 - (yawn_count * 4) - (phone_count * 9) - (drowsiness_count * 12))
+            safety_score = max(
+                70,
+                100 - yawn_count - (phone_count * 2) - (drowsiness_count * 5),
+            )
+            latest_event_type = None
+            latest_event_label = None
+            latest_event_confidence = None
+            if drowsiness_count > 0:
+                latest_event_type = "drowsiness"
+                latest_event_label = "Drowsiness detected"
+                latest_event_confidence = 0.91
+            elif phone_count > 0:
+                latest_event_type = "usephone"
+                latest_event_label = "Phone use detected"
+                latest_event_confidence = 0.88
+            elif yawn_count > 0:
+                latest_event_type = "yawn"
+                latest_event_label = "Yawn detected"
+                latest_event_confidence = 0.83
 
             upsert_document(
                 "driver_behavior_logs",
                 f"{driver_email}_{date_str}",
                 {
+                    "driver_id": driver_id,
+                    "driver_name": driver_profile["name"],
                     "email": driver_email,
                     "date": date_str,
-                    "number_of_ywan": yawn_count,
+                    "number_of_yawn": yawn_count,
                     "number_of_usephone": phone_count,
                     "number_of_drowsiness": drowsiness_count,
                     "safety_score": safety_score,
                     "session_active": False,
+                    "camera_active": False,
+                    "monitor_state": "ready",
+                    "camera_error": None,
+                    "latest_event_type": latest_event_type,
+                    "latest_event_label": latest_event_label,
+                    "latest_event_at": (
+                        datetime.combine(trip_date, time(hour=17, minute=45)).isoformat()
+                        if latest_event_type
+                        else None
+                    ),
+                    "latest_event_confidence": latest_event_confidence,
+                    "updated_at": datetime.combine(
+                        trip_date,
+                        time(hour=18, minute=0),
+                    ).isoformat(),
                     "seed_source": SEED_TAG,
                 },
                 counts,
@@ -765,9 +1002,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--reset-mode",
-        choices=["tagged", "full"],
+        choices=["tagged", "full", "known-docs"],
         default="full",
-        help="Use 'full' for a clean demo database, or 'tagged' to remove only current seeded documents.",
+        help=(
+            "Use 'full' for a collection scan cleanup, 'tagged' to remove only "
+            "current seeded documents, or 'known-docs' for deterministic "
+            "write-only cleanup when Firestore read quota is constrained."
+        ),
     )
     parser.add_argument(
         "--delete-legacy",
@@ -797,6 +1038,7 @@ def main() -> None:
     cleanup_counts = reset_demo_database(
         reset_mode=args.reset_mode,
         delete_legacy=args.delete_legacy,
+        known_doc_window_days=max(args.days, KNOWN_DOC_CLEANUP_DAYS),
     )
     core_counts, users = seed_core_documents()
     ops_counts = seed_operational_history(days_to_seed=args.days)

@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-import '../../providers/app_state_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../providers/app_state_provider.dart';
 import '../../utils/api_config.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/kpi_card.dart';
@@ -36,7 +36,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<Map<String, dynamic>> fetchAdminSummary() async {
     try {
       final res = await http
-          .get(Uri.parse('${ApiConfig.baseUrl}/admin/summary'))
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/admin/summary'),
+          )
           .timeout(const Duration(seconds: 12));
 
       if (res.statusCode == 200) {
@@ -65,8 +67,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch provider to rebuild on theme toggle
     context.watch<AppStateProvider>();
-
     return FutureBuilder<Map<String, dynamic>>(
       future: _adminSummary,
       builder: (context, snapshot) {
@@ -102,7 +104,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Admin Control Center',
+                  'Shuttle Operations Dashboard',
                   style: GoogleFonts.inter(
                     color: AppTheme.textPrimary,
                     fontSize: 16,
@@ -110,7 +112,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
                 Text(
-                  'Operational overview for Smart Shuttle',
+                  'Web-first admin control center',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary,
                     fontSize: 11,
@@ -123,54 +125,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               IconButton(
                 tooltip: 'Refresh',
                 onPressed: _reloadAdminSummary,
-                icon: Icon(
-                  Icons.refresh_rounded,
-                  color: AppTheme.textSecondary,
-                ),
+                icon:
+                    Icon(Icons.refresh_rounded, color: AppTheme.textSecondary),
               ),
               const SizedBox(width: 8),
             ],
           ),
           body: LayoutBuilder(
             builder: (context, constraints) {
-              final horizontalPadding =
-                  constraints.maxWidth >= 1100 ? 24.0 : 16.0;
+              final isWide = constraints.maxWidth >= 1120;
+              final isMedium = constraints.maxWidth >= 800;
+
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (syncError != null) ...[
+                    _SyncWarning(
+                      message: syncError,
+                      onRetry: _reloadAdminSummary,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  // ── Compact Status Row (replaces hero) ─────────
+                  _CompactStatusRow(stats: stats),
+                  const SizedBox(height: 16),
+                  // ── KPI Strip ──────────────────────────────────
+                  _KpiStrip(stats: stats),
+                  const SizedBox(height: 16),
+                  if (isWide)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const _SectionLabel('Quick Actions'),
+                              const SizedBox(height: 12),
+                              const _ModuleGrid(columnCount: 2),
+                              const SizedBox(height: 16),
+                              _PriorityQueue(alerts: alerts),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            children: [
+                              _RecentAlertsPanel(alerts: alerts),
+                              const SizedBox(height: 16),
+                              _OpsSnapshot(stats: stats, alerts: alerts),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    const _SectionLabel('Quick Actions'),
+                    const SizedBox(height: 12),
+                    _ModuleGrid(columnCount: isMedium ? 2 : 1),
+                    const SizedBox(height: 16),
+                    _RecentAlertsPanel(alerts: alerts),
+                    const SizedBox(height: 16),
+                    _PriorityQueue(alerts: alerts),
+                    const SizedBox(height: 16),
+                    _OpsSnapshot(stats: stats, alerts: alerts),
+                  ],
+                ],
+              );
 
               return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  16,
-                  horizontalPadding,
-                  20,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isWide ? 28 : 20,
+                  vertical: 20,
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1280),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (syncError != null) ...[
-                          _SyncWarning(
-                            message: syncError,
-                            onRetry: _reloadAdminSummary,
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        _DashboardHeader(alerts: alerts),
-                        const SizedBox(height: 18),
-                        const _SectionLabel('Key Metrics'),
-                        const SizedBox(height: 10),
-                        _KpiSection(stats: stats),
-                        const SizedBox(height: 18),
-                        const _SectionLabel('Quick Actions'),
-                        const SizedBox(height: 12),
-                        _ActionGrid(),
-                        const SizedBox(height: 18),
-                        const _SectionLabel('Real-time Alerts'),
-                        const SizedBox(height: 10),
-                        _AlertsPanel(alerts: alerts),
-                      ],
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 1440),
+                    child: content,
                   ),
                 ),
               );
@@ -182,140 +216,363 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
-  final List<Map<String, dynamic>> alerts;
+// ═══════════════════════════════════════════════════════════════
+// COMPACT STATUS ROW — replaces the large hero section
+// ═══════════════════════════════════════════════════════════════
+class _CompactStatusRow extends StatelessWidget {
+  final Map<String, dynamic> stats;
 
-  const _DashboardHeader({required this.alerts});
+  const _CompactStatusRow({required this.stats});
 
   @override
   Widget build(BuildContext context) {
-    final criticalAlerts =
-        alerts.where((alert) => alert['severity'] == 'critical').length;
-    final summaryText = alerts.isEmpty
-        ? 'Operations are steady right now. Use quick actions below to move between finance, support, and account workflows.'
-        : 'Live issues are coming in. Review quick actions and the alert feed below to respond without extra dashboard clutter.';
+    final riskAlerts = stats['risk_alerts'] ?? 0;
+    final health = stats['system_health'] ?? 0;
+    final isStable = riskAlerts == 0;
 
     return GlassCard(
-      padding: const EdgeInsets.all(20),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final stacked = constraints.maxWidth < 820;
-          final narrative = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.accentDim,
-                  borderRadius: AppTheme.cardRadius,
-                ),
-                child: Text(
-                  'Operational admin panel',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.accent,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Keep the admin workspace focused on the decisions that matter.',
-                style: GoogleFonts.inter(
-                  color: AppTheme.textPrimary,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1.0,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                summaryText,
-                style: GoogleFonts.inter(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12.5,
-                  height: 1.55,
-                ),
-              ),
-            ],
-          );
-
-          final summaryCard = Container(
-            padding: const EdgeInsets.all(16),
+      fillColor: isStable
+          ? AppTheme.positive.withOpacity(0.06)
+          : AppTheme.warning.withOpacity(0.06),
+      borderColor: isStable
+          ? AppTheme.positive.withOpacity(0.20)
+          : AppTheme.warning.withOpacity(0.20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.surfaceHigh.withOpacity(0.82),
-              borderRadius: AppTheme.cardRadius,
-              border: Border.all(color: AppTheme.border),
+              color: isStable
+                  ? AppTheme.positive.withOpacity(0.12)
+                  : AppTheme.warning.withOpacity(0.12),
+              borderRadius: AppTheme.chipRadius,
             ),
+            child: Icon(
+              isStable
+                  ? Icons.check_circle_rounded
+                  : Icons.warning_amber_rounded,
+              color: isStable ? AppTheme.positive : AppTheme.warning,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Live signal',
+                  isStable
+                      ? 'All Systems Operational'
+                      : '$riskAlerts Active Alert${riskAlerts > 1 ? 's' : ''} — Review Required',
                   style: GoogleFonts.inter(
-                    color: AppTheme.textSecondary,
-                    fontSize: 11,
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 12),
-                _HeaderStat(
-                  label: 'Open alerts',
-                  value: '${alerts.length}',
-                  color: alerts.isEmpty ? AppTheme.positive : AppTheme.warning,
-                ),
-                const SizedBox(height: 8),
-                _HeaderStat(
-                  label: 'Critical',
-                  value: '$criticalAlerts',
-                  color:
-                      criticalAlerts > 0 ? AppTheme.danger : AppTheme.textMuted,
-                ),
-                const SizedBox(height: 8),
-                _HeaderStat(
-                  label: 'Modules ready',
-                  value: '5',
-                  color: AppTheme.accent,
+                const SizedBox(height: 2),
+                Text(
+                  'System health: $health%  •  '
+                  'Revenue, feedback, users, and fleet operations in one control center.',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
-          );
-
-          if (stacked) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                narrative,
-                const SizedBox(height: 16),
-                summaryCard,
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: narrative),
-              const SizedBox(width: 16),
-              SizedBox(width: 248, child: summaryCard),
-            ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _HeaderStat extends StatelessWidget {
+// ═══════════════════════════════════════════════════════════════
+// KPI STRIP — compact horizontal row
+// ═══════════════════════════════════════════════════════════════
+class _KpiStrip extends StatelessWidget {
+  final Map<String, dynamic> stats;
+
+  const _KpiStrip({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 800;
+        final crossAxisCount = isWide ? 4 : 2;
+        final childAspectRatio = isWide ? 2.4 : 1.6;
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: childAspectRatio,
+          children: [
+            KpiCard(
+              icon: Icons.directions_bus_rounded,
+              label: 'Fleet Active',
+              value: '${stats['active_buses'] ?? 0}',
+              subtitle: 'Buses currently online',
+              accentColor: AppTheme.accent,
+            ),
+            KpiCard(
+              icon: Icons.warning_amber_rounded,
+              label: 'Risk Alerts',
+              value: '${stats['risk_alerts'] ?? 0}',
+              subtitle: 'Needs admin review',
+              isPositive: (stats['risk_alerts'] ?? 0) == 0,
+              accentColor: AppTheme.warning,
+            ),
+            KpiCard(
+              icon: Icons.dns_rounded,
+              label: 'API Health',
+              value: '${stats['system_health'] ?? 0}%',
+              subtitle: 'Monitoring and sync status',
+              accentColor: AppTheme.positive,
+            ),
+            KpiCard(
+              icon: Icons.manage_accounts_rounded,
+              label: 'Users',
+              value: '${stats['registered_users'] ?? 0}',
+              subtitle: 'Students, drivers, admins',
+              accentColor: AppTheme.secondaryAccent,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE GRID — quick action cards
+// ═══════════════════════════════════════════════════════════════
+class _ModuleGrid extends StatelessWidget {
+  final int columnCount;
+
+  const _ModuleGrid({required this.columnCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final modules = [
+      _ModuleCardData(
+        title: 'Revenue',
+        subtitle: 'Track profits, leakage, and AI passenger totals.',
+        icon: Icons.bar_chart_rounded,
+        accent: AppTheme.positive,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RevenueDashboardScreen()),
+        ),
+      ),
+      _ModuleCardData(
+        title: 'Feedback',
+        subtitle: 'Review ratings by trip and inspect low-score comments.',
+        icon: Icons.rate_review_rounded,
+        accent: AppTheme.accent,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminFeedbackScreen()),
+        ),
+      ),
+      _ModuleCardData(
+        title: 'Users',
+        subtitle: 'Edit users, disable accounts, and manage roles safely.',
+        icon: Icons.manage_accounts_rounded,
+        accent: AppTheme.warning,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminUsersScreen()),
+        ),
+      ),
+      _ModuleCardData(
+        title: 'Lost & Found',
+        subtitle: 'Resolve claim verification and handover workflow.',
+        icon: Icons.search_rounded,
+        accent: AppTheme.textSecondary,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminLostFoundScreen()),
+        ),
+      ),
+      _ModuleCardData(
+        title: 'Audit Logs',
+        subtitle: 'Inspect timeline events across users and system modules.',
+        icon: Icons.history_rounded,
+        accent: AppTheme.info,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AuditLogScreen()),
+        ),
+      ),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columnCount,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: columnCount >= 2 ? 2.6 : 2.8,
+      ),
+      itemCount: modules.length,
+      itemBuilder: (context, index) {
+        final module = modules[index];
+        return _ModuleCard(module: module);
+      },
+    );
+  }
+}
+
+class _ModuleCardData {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _ModuleCardData({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
+}
+
+class _ModuleCard extends StatelessWidget {
+  final _ModuleCardData module;
+
+  const _ModuleCard({required this.module});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      onTap: module.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: module.accent.withOpacity(0.14),
+              borderRadius: AppTheme.chipRadius,
+            ),
+            child: Icon(module.icon, color: module.accent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  module.title,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  module.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.arrow_forward_rounded,
+              color: AppTheme.textMuted, size: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OPS SNAPSHOT
+// ═══════════════════════════════════════════════════════════════
+class _OpsSnapshot extends StatelessWidget {
+  final Map<String, dynamic> stats;
+  final List<Map<String, dynamic>> alerts;
+
+  const _OpsSnapshot({
+    required this.stats,
+    required this.alerts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final criticalAlerts =
+        alerts.where((alert) => alert['severity'] == 'critical').length;
+    final warningAlerts =
+        alerts.where((alert) => alert['severity'] != 'critical').length;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Operations Snapshot',
+            style: GoogleFonts.inter(
+              color: AppTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SnapshotRow(
+            label: 'System health',
+            value: '${stats['system_health'] ?? 0}%',
+            color: AppTheme.positive,
+          ),
+          const SizedBox(height: 8),
+          _SnapshotRow(
+            label: 'Critical alerts',
+            value: '$criticalAlerts',
+            color: criticalAlerts > 0 ? AppTheme.danger : AppTheme.textMuted,
+          ),
+          const SizedBox(height: 8),
+          _SnapshotRow(
+            label: 'Warning alerts',
+            value: '$warningAlerts',
+            color: warningAlerts > 0 ? AppTheme.warning : AppTheme.textMuted,
+          ),
+          const SizedBox(height: 8),
+          _SnapshotRow(
+            label: 'User footprint',
+            value: '${stats['registered_users'] ?? 0}',
+            color: AppTheme.accent,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SnapshotRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
 
-  const _HeaderStat({
+  const _SnapshotRow({
     required this.label,
     required this.value,
     required this.color,
@@ -338,8 +595,8 @@ class _HeaderStat extends StatelessWidget {
           value,
           style: GoogleFonts.inter(
             color: color,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -347,318 +604,73 @@ class _HeaderStat extends StatelessWidget {
   }
 }
 
-class _KpiSection extends StatelessWidget {
-  final Map<String, dynamic> stats;
+// ═══════════════════════════════════════════════════════════════
+// PRIORITY QUEUE — improved spacing and severity badges
+// ═══════════════════════════════════════════════════════════════
+class _PriorityQueue extends StatelessWidget {
+  final List<Map<String, dynamic>> alerts;
 
-  const _KpiSection({required this.stats});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 760;
-        return GridView.count(
-          crossAxisCount: isWide ? 2 : 1,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: isWide ? 2.85 : 2.55,
-          children: [
-            KpiCard(
-              icon: Icons.warning_amber_rounded,
-              label: 'Risk Alerts',
-              value: '${stats['risk_alerts'] ?? 0}',
-              subtitle: (stats['risk_alerts'] ?? 0) == 0
-                  ? 'No current escalations need review.'
-                  : 'Active incidents require admin attention.',
-              isPositive: (stats['risk_alerts'] ?? 0) == 0,
-              accentColor: AppTheme.warning,
-              compact: true,
-            ),
-            KpiCard(
-              icon: Icons.manage_accounts_rounded,
-              label: 'Users',
-              value: '${stats['registered_users'] ?? 0}',
-              subtitle: 'Registered students, drivers, and admins.',
-              accentColor: AppTheme.accent,
-              compact: true,
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ActionGrid extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final actions = [
-      _ActionCardData(
-        title: 'Revenue',
-        subtitle:
-            'Review trip revenue, ticket breakdowns, and business trends.',
-        icon: Icons.bar_chart_rounded,
-        accent: AppTheme.positive,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const RevenueDashboardScreen()),
-        ),
-      ),
-      _ActionCardData(
-        title: 'Feedback',
-        subtitle: 'Inspect rider comments, ratings, and experience issues.',
-        icon: Icons.rate_review_rounded,
-        accent: AppTheme.accent,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminFeedbackScreen()),
-        ),
-      ),
-      _ActionCardData(
-        title: 'Lost & Found',
-        subtitle: 'Manage claim resolution and item handover workflows.',
-        icon: Icons.search_rounded,
-        accent: AppTheme.warning,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminLostFoundScreen()),
-        ),
-      ),
-      _ActionCardData(
-        title: 'Users',
-        subtitle: 'Control access, account status, and role assignments.',
-        icon: Icons.people_alt_rounded,
-        accent: AppTheme.secondaryAccent,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminUsersScreen()),
-        ),
-      ),
-      _ActionCardData(
-        title: 'Audit Log',
-        subtitle: 'Trace important user actions and system activity.',
-        icon: Icons.history_rounded,
-        accent: AppTheme.info,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AuditLogScreen()),
-        ),
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final columns = width >= 1220
-            ? 5
-            : width >= 980
-                ? 3
-                : width >= 760
-                    ? 2
-                    : 1;
-        final aspectRatio = columns == 1
-            ? 2.65
-            : columns == 2
-                ? 2.05
-                : columns == 3
-                    ? 1.72
-                    : 1.34;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: aspectRatio,
-          ),
-          itemCount: actions.length,
-          itemBuilder: (context, index) {
-            return _ActionCard(action: actions[index]);
-          },
-        );
-      },
-    );
-  }
-}
-
-class _ActionCardData {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const _ActionCardData({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-}
-
-class _ActionCard extends StatelessWidget {
-  final _ActionCardData action;
-
-  const _ActionCard({required this.action});
+  const _PriorityQueue({required this.alerts});
 
   @override
   Widget build(BuildContext context) {
+    final visibleAlerts = alerts.take(4).toList();
+
     return GlassCard(
-      onTap: action.onTap,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: action.accent.withOpacity(
-                    AppTheme.isDarkMode ? 0.16 : 0.11,
-                  ),
-                  borderRadius: AppTheme.cardRadius,
-                ),
-                child: Icon(action.icon, color: action.accent, size: 20),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceHigh,
-                  borderRadius: AppTheme.cardRadius,
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Open',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_outward_rounded,
-                      color: AppTheme.textMuted,
-                      size: 13,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            action.title,
-            style: GoogleFonts.inter(
-              color: AppTheme.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Text(
-              action.subtitle,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                color: AppTheme.textSecondary,
-                fontSize: 11.5,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AlertsPanel extends StatelessWidget {
-  final List<Map<String, dynamic>> alerts;
-
-  const _AlertsPanel({required this.alerts});
-
-  @override
-  Widget build(BuildContext context) {
-    final criticalAlerts =
-        alerts.where((alert) => alert['severity'] == 'critical').length;
-
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.sensors_rounded, color: AppTheme.danger, size: 17),
-              const SizedBox(width: 8),
               Text(
-                'Real-time Alerts',
+                'Priority Queue',
                 style: GoogleFonts.inter(
                   color: AppTheme.textPrimary,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceHigh,
-                  borderRadius: AppTheme.cardRadius,
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: Text(
-                  '${alerts.length} total',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textSecondary,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
+              if (visibleAlerts.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withOpacity(0.10),
+                    borderRadius: AppTheme.chipRadius,
+                  ),
+                  child: Text(
+                    '${visibleAlerts.length} pending',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.danger,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            criticalAlerts == 0
-                ? 'The live alert feed stays here for backend incidents and operational checks as they happen.'
-                : '$criticalAlerts critical issue${criticalAlerts == 1 ? '' : 's'} need attention in the live feed.',
+            'Highest-signal issues first. Open the correct module from Quick Actions above.',
             style: GoogleFonts.inter(
-              color: AppTheme.textSecondary,
-              fontSize: 11.5,
-              height: 1.5,
+              color: AppTheme.textMuted,
+              fontSize: 11,
+              height: 1.4,
             ),
           ),
           const SizedBox(height: 12),
-          if (alerts.isEmpty)
+          if (visibleAlerts.isEmpty)
             const _EmptyState(
-              message:
-                  'Alert traffic will appear here when the backend reports new issues.',
-            )
+                message: 'No active issues are waiting for admin review.')
           else
             Column(
-              children: alerts
-                  .take(5)
-                  .map(
-                    (alert) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: _AlertTile(alert: alert),
-                    ),
-                  )
+              children: visibleAlerts
+                  .map((alert) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _PriorityItem(alert: alert),
+                      ))
                   .toList(),
             ),
         ],
@@ -667,102 +679,74 @@ class _AlertsPanel extends StatelessWidget {
   }
 }
 
-class _AlertTile extends StatelessWidget {
+class _PriorityItem extends StatelessWidget {
   final Map<String, dynamic> alert;
 
-  const _AlertTile({required this.alert});
+  const _PriorityItem({required this.alert});
 
   @override
   Widget build(BuildContext context) {
     final isCritical = alert['severity'] == 'critical';
-    final tone = isCritical ? AppTheme.danger : AppTheme.warning;
+    final color = isCritical ? AppTheme.danger : AppTheme.warning;
 
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: tone.withOpacity(AppTheme.isDarkMode ? 0.08 : 0.07),
+        color: color.withOpacity(0.06),
         borderRadius: AppTheme.cardRadius,
-        border: Border.all(
-          color: tone.withOpacity(AppTheme.isDarkMode ? 0.20 : 0.16),
-        ),
+        border: Border.all(color: color.withOpacity(0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: tone.withOpacity(AppTheme.isDarkMode ? 0.16 : 0.12),
-              borderRadius: AppTheme.cardRadius,
+              color: color.withOpacity(0.14),
+              borderRadius: AppTheme.chipRadius,
             ),
-            child: Icon(
-              isCritical
-                  ? Icons.priority_high_rounded
-                  : Icons.notifications_active_outlined,
-              color: tone,
-              size: 17,
+            child: Text(
+              isCritical ? 'CRIT' : 'WARN',
+              style: GoogleFonts.inter(
+                color: color,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        alert['type']?.toString() ?? 'System alert',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textPrimary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tone.withOpacity(
-                          AppTheme.isDarkMode ? 0.14 : 0.10,
-                        ),
-                        borderRadius: AppTheme.cardRadius,
-                      ),
-                      child: Text(
-                        isCritical ? 'Critical' : 'Warning',
-                        style: GoogleFonts.inter(
-                          color: tone,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  alert['type']?.toString() ?? 'System alert',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   alert['description']?.toString() ??
                       'No additional details provided.',
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary,
-                    fontSize: 11.5,
+                    fontSize: 11,
                     height: 1.45,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  alert['time']?.toString() ?? '--:--',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
               ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            alert['time']?.toString() ?? '--:--',
+            style: GoogleFonts.inter(
+              color: AppTheme.textMuted,
+              fontSize: 10,
             ),
           ),
         ],
@@ -771,6 +755,141 @@ class _AlertTile extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// REAL-TIME ALERTS PANEL
+// ═══════════════════════════════════════════════════════════════
+class _RecentAlertsPanel extends StatelessWidget {
+  final List<Map<String, dynamic>> alerts;
+
+  const _RecentAlertsPanel({required this.alerts});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sensors_rounded,
+                  color: AppTheme.danger, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Real-time Alerts',
+                style: GoogleFonts.inter(
+                  color: AppTheme.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceHigh,
+                  borderRadius: AppTheme.chipRadius,
+                ),
+                child: Text(
+                  '${alerts.length} total',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (alerts.isEmpty)
+            const _EmptyState(
+                message:
+                    'Alert traffic will appear here when the backend reports new issues.')
+          else
+            Column(
+              children: alerts
+                  .take(5)
+                  .map((alert) => _AlertListTile(alert: alert))
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertListTile extends StatelessWidget {
+  final Map<String, dynamic> alert;
+
+  const _AlertListTile({required this.alert});
+
+  @override
+  Widget build(BuildContext context) {
+    final isCritical = alert['severity'] == 'critical';
+    final color = isCritical ? AppTheme.danger : AppTheme.warning;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              borderRadius: AppTheme.chipRadius,
+            ),
+            child: Icon(
+              isCritical
+                  ? Icons.priority_high_rounded
+                  : Icons.notifications_none_rounded,
+              color: color,
+              size: 14,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  alert['type']?.toString() ?? 'System alert',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  alert['description']?.toString() ?? 'No details provided.',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            alert['time']?.toString() ?? '--:--',
+            style: GoogleFonts.inter(
+              color: AppTheme.textMuted,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYNC WARNING
+// ═══════════════════════════════════════════════════════════════
 class _SyncWarning extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
@@ -809,7 +928,6 @@ class _SyncWarning extends StatelessWidget {
                   style: GoogleFonts.inter(
                     color: AppTheme.textSecondary,
                     fontSize: 11,
-                    height: 1.5,
                   ),
                 ),
               ],
@@ -826,6 +944,9 @@ class _SyncWarning extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SHARED UTILITY WIDGETS
+// ═══════════════════════════════════════════════════════════════
 class _SectionLabel extends StatelessWidget {
   final String title;
 
@@ -833,13 +954,20 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: GoogleFonts.inter(
-        color: AppTheme.textPrimary,
-        fontSize: 16,
-        fontWeight: FontWeight.w800,
-      ),
+    return Row(
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: GoogleFonts.inter(
+            color: AppTheme.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Divider(color: AppTheme.border)),
+      ],
     );
   }
 }
@@ -853,7 +981,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceHigh,
         borderRadius: AppTheme.cardRadius,
@@ -863,8 +991,8 @@ class _EmptyState extends StatelessWidget {
         message,
         style: GoogleFonts.inter(
           color: AppTheme.textSecondary,
-          fontSize: 11.5,
-          height: 1.55,
+          fontSize: 12,
+          height: 1.5,
         ),
       ),
     );

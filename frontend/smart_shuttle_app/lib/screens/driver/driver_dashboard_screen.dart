@@ -10,7 +10,6 @@ import '../../providers/app_state_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/api_config.dart';
 import '../../widgets/alert_card.dart';
-import '../../widgets/driver_camera_panel.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/theme_toggle_button.dart';
 import '../auth/login_screen.dart';
@@ -33,14 +32,22 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
   String? _activeTripId;
   String? _activeTripType;
   String _aiState = 'idle';
-  bool _aiPreviewEnabled = false;
-  String? _aiModelPath;
-  String? _aiVideoPath;
+  String _driverMonitorState = 'ready';
   int _estimatedPassengerCount = 0;
   int _estimatedPassengerCountLive = 0;
   int _finalEstimatedPassengerCount = 0;
   int _currentDetectedCount = 0;
   int _peakVisibleCount = 0;
+  int _yawnCount = 0;
+  int _phoneUseCount = 0;
+  int _drowsinessCount = 0;
+  bool _driverBehaviorSessionActive = false;
+  bool _driverCameraActive = false;
+  bool _sessionToggleInFlight = false;
+  String? _driverCameraError;
+  String? _latestBehaviorType;
+  String? _latestBehaviorLabel;
+  String? _latestBehaviorAt;
 
   @override
   void initState() {
@@ -59,15 +66,10 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final provider = context.read<AppStateProvider>();
-      if (!provider.sessionActive ||
-          _aiState == 'stopped' ||
-          _aiState == 'completed' ||
-          _aiState == 'failed') {
-        return;
-      }
+      if (!provider.sessionActive) return;
 
       provider.tickSecond();
-      if (provider.tripDurationSeconds % 2 == 0) {
+      if (provider.tripDurationSeconds % 3 == 0) {
         _fetchSafetyScore();
         _fetchLiveTelemetry();
       }
@@ -94,13 +96,29 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       if (res.statusCode != 200 || !mounted) return;
 
       final data = json.decode(res.body);
+      final yawnCount = (data['number_of_yawn'] as num?)?.toInt() ?? 0;
+      final phoneCount = (data['number_of_usephone'] as num?)?.toInt() ?? 0;
+      final drowsinessCount =
+          (data['number_of_drowsiness'] as num?)?.toInt() ?? 0;
       provider
           .setSafetyScore((data['safety_score'] as num?)?.toDouble() ?? 100);
       provider.syncCounts(
-        (data['number_of_ywan'] as num?)?.toInt() ?? 0,
-        (data['number_of_usephone'] as num?)?.toInt() ?? 0,
-        (data['number_of_drowsiness'] as num?)?.toInt() ?? 0,
+        yawnCount,
+        phoneCount,
+        drowsinessCount,
       );
+      setState(() {
+        _yawnCount = yawnCount;
+        _phoneUseCount = phoneCount;
+        _drowsinessCount = drowsinessCount;
+        _driverBehaviorSessionActive = data['session_active'] == true;
+        _driverCameraActive = data['camera_active'] == true;
+        _driverMonitorState = data['monitor_state']?.toString() ?? 'ready';
+        _driverCameraError = data['camera_error']?.toString();
+        _latestBehaviorType = data['latest_event_type']?.toString();
+        _latestBehaviorLabel = data['latest_event_label']?.toString();
+        _latestBehaviorAt = data['latest_event_at']?.toString();
+      });
     } catch (_) {}
   }
 
@@ -142,53 +160,64 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
   }
 
   Future<void> _handleSessionToggle() async {
-    final provider = context.read<AppStateProvider>();
-    if (!provider.sessionActive) {
-      final tripType = await _showStartDialog();
-      if (tripType == null) return;
+    if (_sessionToggleInFlight) return;
 
-      try {
+    final provider = context.read<AppStateProvider>();
+    setState(() => _sessionToggleInFlight = true);
+
+    try {
+      if (!provider.sessionActive) {
+        final tripType = await _showStartDialog();
+        if (tripType == null) return;
+
         final res = await http.post(
           Uri.parse('${ApiConfig.baseUrl}/driver/start-trip'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
             'bus_id': _busId,
             'trip_type': tripType,
-            'driver_id': provider.userEmail ?? 'driver@shuttle.lk',
+            'driver_id': provider.userId ?? 'driver-01',
+            'driver_email': provider.userEmail ?? 'driver@shuttle.lk',
           }),
         );
 
         if (res.statusCode == 200) {
           final data = json.decode(res.body);
+          final behaviorSession =
+              data['driver_behavior_session'] as Map<String, dynamic>?;
+          if (!mounted) return;
           setState(() {
             _activeTripType = tripType;
             _activeTripId = data['trip_id']?.toString();
             _aiState =
                 data['ai_session']?['ai_state']?.toString() ?? 'starting';
-            _aiPreviewEnabled = data['ai_session']?['preview_enabled'] == true;
-            _aiModelPath = data['ai_session']?['model_path']?.toString();
-            _aiVideoPath = data['ai_session']?['video_path']?.toString();
             _estimatedPassengerCount = 0;
             _estimatedPassengerCountLive = 0;
             _finalEstimatedPassengerCount = 0;
             _currentDetectedCount = 0;
             _peakVisibleCount = 0;
+            _driverBehaviorSessionActive = true;
+            _driverMonitorState =
+                behaviorSession?['monitor_state']?.toString() ?? 'starting';
+            _driverCameraActive = behaviorSession?['camera_active'] == true;
+            _driverCameraError = null;
+            _latestBehaviorType = null;
+            _latestBehaviorLabel = null;
+            _latestBehaviorAt = null;
           });
-          provider.toggleSession();
+          provider.beginDriverSession();
           _showSuccess(
-              'Passenger preview started and the driver camera panel is ready.');
+            'Passenger preview and driver behavior monitoring are now active.',
+          );
           _fetchLiveTelemetry();
+          _fetchSafetyScore();
         } else {
           _showError(
               _detailFromResponse(res, 'Unable to start the AI session.'));
         }
-      } catch (_) {
-        _showError('Server connection failed while starting the session.');
+        return;
       }
-      return;
-    }
 
-    try {
       final stopRes = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/driver/stop-session'),
         headers: {'Content-Type': 'application/json'},
@@ -201,6 +230,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       }
 
       final stopData = json.decode(stopRes.body);
+      final behaviorStop =
+          stopData['driver_behavior_session'] as Map<String, dynamic>?;
       final stopAiState = stopData['ai_state']?.toString() ?? 'stopped';
       final stopLiveEstimate =
           (stopData['estimated_passenger_count_live'] as num?)?.toInt() ??
@@ -217,30 +248,29 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
               stopAiState == 'failed')
           ? stopFinalEstimate
           : stopLiveEstimate;
+      if (!mounted) return;
       setState(() {
         _activeTripId = stopData['trip_id']?.toString() ?? _activeTripId;
         _activeTripType = stopData['trip_type']?.toString() ?? _activeTripType;
         _aiState = stopAiState;
-        _aiPreviewEnabled = false;
         _estimatedPassengerCountLive = stopLiveEstimate;
         _finalEstimatedPassengerCount = stopFinalEstimate;
         _estimatedPassengerCount = stopEffectiveEstimate;
         _currentDetectedCount = 0;
         _peakVisibleCount = (stopData['peak_visible_count'] as num?)?.toInt() ??
             _peakVisibleCount;
+        _driverBehaviorSessionActive = false;
+        _driverMonitorState =
+            behaviorStop?['monitor_state']?.toString() ?? 'stopped';
+        _driverCameraActive = behaviorStop?['camera_active'] == true;
       });
-    } catch (_) {
-      _showError('Failed to stop the AI session.');
-      return;
-    }
 
-    final counts = await _showEndDialog();
-    if (counts == null) {
-      _showSuccess('AI stopped. Finalize the trip when you are ready.');
-      return;
-    }
+      final counts = await _showEndDialog();
+      if (counts == null) {
+        _showSuccess('AI stopped. Finalize the trip when you are ready.');
+        return;
+      }
 
-    try {
       final endRes = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/driver/end-trip'),
         headers: {'Content-Type': 'application/json'},
@@ -254,27 +284,41 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         }),
       );
       if (endRes.statusCode == 200) {
-        provider.toggleSession();
+        if (!mounted) return;
+        provider.endDriverSession();
         setState(() {
           _activeTripId = null;
           _activeTripType = null;
           _aiState = 'idle';
-          _aiPreviewEnabled = false;
-          _aiModelPath = null;
-          _aiVideoPath = null;
           _estimatedPassengerCount = 0;
           _estimatedPassengerCountLive = 0;
           _finalEstimatedPassengerCount = 0;
           _currentDetectedCount = 0;
           _peakVisibleCount = 0;
+          _driverBehaviorSessionActive = false;
+          _driverCameraActive = false;
+          _driverMonitorState = 'stopped';
+          _driverCameraError = null;
+          _latestBehaviorType = null;
+          _latestBehaviorLabel = null;
+          _latestBehaviorAt = null;
         });
         _showSuccess('Trip data synced to the revenue engine.');
         _fetchLiveTelemetry();
+        _fetchSafetyScore();
       } else {
         _showError(_detailFromResponse(endRes, 'Failed to finalize the trip.'));
       }
     } catch (_) {
-      _showError('Failed to finalize the trip.');
+      _showError(
+        provider.sessionActive
+            ? 'Failed to sync the session with the backend.'
+            : 'Server connection failed while starting the session.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sessionToggleInFlight = false);
+      }
     }
   }
 
@@ -410,68 +454,82 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
     return AppTheme.danger;
   }
 
-  bool _isMonitorLive(AppStateProvider provider) {
-    return provider.sessionActive &&
-        _aiState != 'stopped' &&
-        _aiState != 'completed' &&
-        _aiState != 'failed' &&
-        _aiState != 'idle';
+  Color _aiStateColor() {
+    switch (_aiState) {
+      case 'processing':
+      case 'starting':
+        return AppTheme.positive;
+      case 'stopped':
+      case 'completed':
+        return AppTheme.warning;
+      case 'failed':
+        return AppTheme.danger;
+      default:
+        return AppTheme.textMuted;
+    }
   }
 
-  String _shortPath(String? value) {
-    if (value == null || value.isEmpty) return '--';
-    final normalized = value.replaceAll('\\', '/');
-    final segments = normalized
-        .split('/')
-        .where((segment) => segment.trim().isNotEmpty)
-        .toList();
-    return segments.isEmpty ? value : segments.last;
+  Color _driverMonitorColor() {
+    switch (_driverMonitorState) {
+      case 'monitoring':
+      case 'starting':
+      case 'camera_opening':
+        return AppTheme.positive;
+      case 'camera_unavailable':
+        return AppTheme.warning;
+      case 'failed':
+        return AppTheme.danger;
+      case 'stopped':
+      case 'standby':
+        return AppTheme.textMuted;
+      default:
+        return AppTheme.textMuted;
+    }
   }
 
-  Widget _buildSessionMonitor(AppStateProvider provider) {
-    final sessionLive = _isMonitorLive(provider);
+  Color _latestBehaviorColor() {
+    switch (_latestBehaviorType) {
+      case 'drowsiness':
+        return AppTheme.danger;
+      case 'usephone':
+      case 'yawn':
+        return AppTheme.warning;
+      default:
+        return AppTheme.accent;
+    }
+  }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final splitView = constraints.maxWidth >= 980;
-        final passengerPanel = _PassengerPreviewPanel(
-          sessionLive: sessionLive,
-          previewEnabled: _aiPreviewEnabled,
-          aiState: _aiState,
-          estimatedPassengerCount: _estimatedPassengerCount,
-          estimatedPassengerCountLive: _estimatedPassengerCountLive,
-          finalEstimatedPassengerCount: _finalEstimatedPassengerCount,
-          currentDetectedCount: _currentDetectedCount,
-          peakVisibleCount: _peakVisibleCount,
-          sessionDurationLabel: _fmt(provider.tripDurationSeconds),
-          modelLabel: _shortPath(_aiModelPath),
-          videoLabel: _shortPath(_aiVideoPath),
-        );
-        final cameraPanel = DriverCameraPanel(
-          sessionLive: sessionLive,
-          aiState: _aiState,
-        );
+  IconData _latestBehaviorIcon() {
+    switch (_latestBehaviorType) {
+      case 'drowsiness':
+        return Icons.remove_red_eye_rounded;
+      case 'usephone':
+        return Icons.phone_android_rounded;
+      case 'yawn':
+        return Icons.sentiment_very_satisfied_rounded;
+      default:
+        return Icons.warning_amber_rounded;
+    }
+  }
 
-        if (splitView) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: passengerPanel),
-              const SizedBox(width: 16),
-              Expanded(child: cameraPanel),
-            ],
-          );
-        }
+  String _driverMonitorLabel() {
+    switch (_driverMonitorState) {
+      case 'camera_opening':
+        return 'Camera Opening';
+      case 'camera_unavailable':
+        return 'Camera Unavailable';
+      default:
+        return _driverMonitorState.replaceAll('_', ' ').toUpperCase();
+    }
+  }
 
-        return Column(
-          children: [
-            passengerPanel,
-            const SizedBox(height: 16),
-            cameraPanel,
-          ],
-        );
-      },
-    );
+  String? _formattedLatestBehaviorTime() {
+    if (_latestBehaviorAt == null || _latestBehaviorAt!.isEmpty) return null;
+    final parsed = DateTime.tryParse(_latestBehaviorAt!);
+    if (parsed == null) return _latestBehaviorAt;
+    final hh = parsed.hour.toString().padLeft(2, '0');
+    final mm = parsed.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
   }
 
   @override
@@ -479,30 +537,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
     // Watch provider to rebuild on theme toggle
     context.watch<AppStateProvider>();
     final provider = context.watch<AppStateProvider>();
-    final sessionRunning = _isMonitorLive(provider);
-    final sessionFinalizing = provider.sessionActive &&
-        !sessionRunning &&
-        (_aiState == 'stopped' || _aiState == 'completed');
-    final sessionTone = sessionRunning
-        ? AppTheme.positive
-        : sessionFinalizing
-            ? AppTheme.warning
-            : AppTheme.textMuted;
-    final sessionTitle = sessionRunning
-        ? 'Session Active'
-        : sessionFinalizing
-            ? 'Session Ready To Finalize'
-            : 'Session Idle';
-    final sessionBadge = sessionRunning
-        ? 'RUNNING'
-        : sessionFinalizing
-            ? 'FINALIZE'
-            : 'READY';
-    final sessionSummary = sessionRunning
-        ? 'Passenger preview and driver camera are currently running.'
-        : sessionFinalizing
-            ? 'Passenger preview has stopped. Finalize the trip when you are ready.'
-            : 'Start Session to begin passenger preview and camera monitoring.';
+    final latestBehaviorTime = _formattedLatestBehaviorTime();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -540,14 +575,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1280),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                GestureDetector(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            IgnorePointer(
+              ignoring: _sessionToggleInFlight,
+              child: AnimatedOpacity(
+                opacity: _sessionToggleInFlight ? 0.72 : 1,
+                duration: const Duration(milliseconds: 180),
+                child: GestureDetector(
                   onTapDown: (_) => _btnCtrl.reverse(),
                   onTapUp: (_) {
                     _btnCtrl.forward();
@@ -561,408 +598,120 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                     child: _SessionButton(
                       isActive: provider.sessionActive,
                       aiState: _aiState,
+                      isBusy: _sessionToggleInFlight,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                GlassCard(
-                  fillColor: sessionRunning
-                      ? AppTheme.positiveDim.withOpacity(
-                          AppTheme.isDarkMode ? 0.34 : 0.92,
-                        )
-                      : sessionFinalizing
-                          ? AppTheme.warningDim.withOpacity(
-                              AppTheme.isDarkMode ? 0.26 : 0.96,
-                            )
-                          : null,
-                  borderColor: sessionRunning
-                      ? AppTheme.positive.withOpacity(
-                          AppTheme.isDarkMode ? 0.34 : 0.20,
-                        )
-                      : sessionFinalizing
-                          ? AppTheme.warning.withOpacity(
-                              AppTheme.isDarkMode ? 0.30 : 0.20,
-                            )
-                          : null,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+            const SizedBox(height: 20),
+            GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: sessionTone.withOpacity(
-                            AppTheme.isDarkMode ? 0.16 : 0.12,
+                      Icon(Icons.smart_display_rounded,
+                          color: _aiStateColor(), size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Passenger AI: ${_aiState.toUpperCase()}'
+                          '${_activeTripId != null ? '  | Trip: $_activeTripId' : ''}'
+                          '${_activeTripType != null ? '  | Type: $_activeTripType' : ''}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                          borderRadius: AppTheme.chipRadius,
                         ),
-                        child: Icon(
-                          sessionRunning
-                              ? Icons.check_circle_rounded
-                              : sessionFinalizing
-                                  ? Icons.assignment_turned_in_rounded
-                                  : Icons.pause_circle_outline_rounded,
-                          color: sessionTone,
-                          size: 18,
-                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.videocam_rounded,
+                        color: _driverMonitorColor(),
+                        size: 18,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    sessionTitle,
-                                    style: GoogleFonts.inter(
-                                      color: sessionRunning || sessionFinalizing
-                                          ? AppTheme.textPrimary
-                                          : AppTheme.textSecondary,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: sessionTone.withOpacity(
-                                      AppTheme.isDarkMode ? 0.16 : 0.12,
-                                    ),
-                                    borderRadius: AppTheme.cardRadius,
-                                  ),
-                                  child: Text(
-                                    sessionBadge,
-                                    style: GoogleFonts.inter(
-                                      color: sessionTone,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              sessionSummary,
-                              style: GoogleFonts.inter(
-                                color: AppTheme.textSecondary,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'AI Status: ${_aiState.toUpperCase()}'
-                              '${_activeTripId != null ? '  | Trip: $_activeTripId' : ''}'
-                              '${_activeTripType != null ? '  | Type: $_activeTripType' : ''}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
-                                color: AppTheme.textSecondary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Driver Monitor: ${_driverMonitorLabel()}'
+                          '  | Camera: ${_driverCameraActive ? 'LIVE' : _driverBehaviorSessionActive ? 'INITIALIZING' : 'STANDBY'}'
+                          '  | Session: ${provider.sessionActive ? 'ACTIVE' : 'INACTIVE'}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                const _SectionLabel('Session Monitor'),
-                const SizedBox(height: 12),
-                _buildSessionMonitor(provider),
-                const SizedBox(height: 20),
-                GlassCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Safety Score',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                  if (_latestBehaviorLabel != null &&
+                      _latestBehaviorLabel!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color:
+                                _latestBehaviorColor().withValues(alpha: 0.12),
+                            borderRadius: AppTheme.chipRadius,
+                            border: Border.all(
+                              color: _latestBehaviorColor()
+                                  .withValues(alpha: 0.34),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _latestBehaviorIcon(),
+                                color: _latestBehaviorColor(),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Live Alert: $_latestBehaviorLabel',
+                                style: GoogleFonts.inter(
+                                  color: _latestBehaviorColor(),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 86,
-                            height: 86,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                  value: provider.safetyScore / 100,
-                                  strokeWidth: 7,
-                                  backgroundColor: AppTheme.border,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    _scoreColor(provider.safetyScore),
-                                  ),
-                                  strokeCap: StrokeCap.round,
-                                ),
-                                Text(
-                                  provider.safetyScore.toStringAsFixed(0),
-                                  style: GoogleFonts.inter(
-                                    color: _scoreColor(provider.safetyScore),
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
+                        if (latestBehaviorTime != null)
+                          Text(
+                            'Updated $latestBehaviorTime',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(width: 18),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  provider.safetyScore >= 85
-                                      ? 'Excellent - Keep it up!'
-                                      : provider.safetyScore >= 60
-                                          ? 'Caution - Check alerts'
-                                          : 'Poor - Needs attention',
-                                  style: GoogleFonts.inter(
-                                    color: _scoreColor(provider.safetyScore),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                _DeductRow('Yawn detection', '-1 pts',
-                                    AppTheme.warning),
-                                const SizedBox(height: 4),
-                                _DeductRow('Phone use event', '-2 pts',
-                                    AppTheme.warning),
-                                const SizedBox(height: 4),
-                                _DeductRow('Drowsiness detection', '-5 pts',
-                                    AppTheme.danger),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const _SectionLabel('AI Safety Monitoring'),
-                const SizedBox(height: 12),
-                AlertCard(
-                  icon: Icons.sentiment_very_satisfied_rounded,
-                  title: 'Yawn Detected',
-                  subtitle: 'AI monitors mouth opening',
-                  isActive: provider.yawnAlert,
-                  alertColor: AppTheme.warning,
-                  onSimulate: provider.sessionActive
-                      ? () => context
-                          .read<AppStateProvider>()
-                          .triggerYawn(!provider.yawnAlert)
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                AlertCard(
-                  icon: Icons.phone_android_rounded,
-                  title: 'Phone Use Detected',
-                  subtitle: 'Vision model: handheld device detection',
-                  isActive: provider.phoneUseAlert,
-                  alertColor: AppTheme.warning,
-                  onSimulate: provider.sessionActive
-                      ? () => context
-                          .read<AppStateProvider>()
-                          .triggerPhoneUse(!provider.phoneUseAlert)
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                AlertCard(
-                  icon: Icons.remove_red_eye_rounded,
-                  title: 'Drowsiness Detected',
-                  subtitle: 'AI monitors eye closure and head position',
-                  isActive: provider.drowsinessAlert,
-                  alertColor: AppTheme.danger,
-                  onSimulate: provider.sessionActive
-                      ? () => context
-                          .read<AppStateProvider>()
-                          .triggerDrowsiness(!provider.drowsinessAlert)
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PassengerPreviewPanel extends StatelessWidget {
-  final bool sessionLive;
-  final bool previewEnabled;
-  final String aiState;
-  final int estimatedPassengerCount;
-  final int estimatedPassengerCountLive;
-  final int finalEstimatedPassengerCount;
-  final int currentDetectedCount;
-  final int peakVisibleCount;
-  final String sessionDurationLabel;
-  final String modelLabel;
-  final String videoLabel;
-
-  const _PassengerPreviewPanel({
-    required this.sessionLive,
-    required this.previewEnabled,
-    required this.aiState,
-    required this.estimatedPassengerCount,
-    required this.estimatedPassengerCountLive,
-    required this.finalEstimatedPassengerCount,
-    required this.currentDetectedCount,
-    required this.peakVisibleCount,
-    required this.sessionDurationLabel,
-    required this.modelLabel,
-    required this.videoLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isPaused = aiState == 'stopped' || aiState == 'completed';
-    final statusColor = sessionLive
-        ? (previewEnabled ? AppTheme.positive : AppTheme.accent)
-        : isPaused
-            ? AppTheme.warning
-            : AppTheme.textMuted;
-    final statusLabel = sessionLive
-        ? (previewEnabled ? 'Live' : 'Tracking')
-        : isPaused
-            ? 'Paused'
-            : 'Idle';
-    final helperText = sessionLive
-        ? previewEnabled
-            ? 'Passenger counting preview is live for the active trip.'
-            : 'Passenger counting is active in background mode for the active trip.'
-        : isPaused
-            ? 'Passenger counting has stopped, and final trip values remain available below.'
-            : 'Start Session to activate passenger counting preview.';
-    final hasSessionData = sessionLive || aiState != 'idle';
-    final showModel = modelLabel != '--';
-    final showVideo = videoLabel != '--';
-
-    return GlassCard(
-      fillColor: AppTheme.accent.withOpacity(0.05),
-      borderColor: AppTheme.accent.withOpacity(0.20),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.accent.withOpacity(
-                    AppTheme.isDarkMode ? 0.16 : 0.12,
-                  ),
-                  borderRadius: AppTheme.chipRadius,
-                ),
-                child: Icon(
-                  Icons.groups_rounded,
-                  color: AppTheme.accent,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Passenger Count Preview',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      helperText,
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.4,
-                      ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(
-                    AppTheme.isDarkMode ? 0.14 : 0.10,
-                  ),
-                  borderRadius: AppTheme.cardRadius,
-                ),
-                child: Text(
-                  statusLabel,
-                  style: GoogleFonts.inter(
-                    color: statusColor,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: AppTheme.cardRadius,
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 460;
-                final totalBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hasSessionData ? '$estimatedPassengerCount' : '--',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textPrimary,
-                        fontSize: 38,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.3,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Estimated passenger count',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  if (_sessionToggleInFlight) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Live: $estimatedPassengerCountLive   |   Final: $finalEstimatedPassengerCount',
+                      'Syncing session state across passenger preview and driver monitor...',
                       style: GoogleFonts.inter(
                         color: AppTheme.textSecondary,
                         fontSize: 11,
@@ -970,191 +719,288 @@ class _PassengerPreviewPanel extends StatelessWidget {
                       ),
                     ),
                   ],
-                );
-                final telemetryBlock = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _PreviewMetric(
-                      label: 'Current visible',
-                      value: '$currentDetectedCount',
-                    ),
-                    const SizedBox(height: 10),
-                    _PreviewMetric(
-                      label: 'Peak visible',
-                      value: '$peakVisibleCount',
-                    ),
-                    const SizedBox(height: 10),
-                    _PreviewMetric(
-                      label: 'Preview mode',
-                      value: previewEnabled ? 'Enabled' : 'Background',
+                  if (_driverCameraError != null &&
+                      _driverCameraError!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _driverCameraError!,
+                      style: GoogleFonts.inter(
+                        color: AppTheme.warning,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
-                );
-
-                if (stacked) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      totalBlock,
-                      const SizedBox(height: 14),
-                      telemetryBlock,
-                    ],
-                  );
-                }
-
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: totalBlock),
-                    const SizedBox(width: 18),
-                    SizedBox(width: 170, child: telemetryBlock),
-                  ],
-                );
-              },
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.timer_rounded,
-                  label: 'Session Duration',
-                  value: sessionDurationLabel,
-                  color: AppTheme.accent,
-                ),
+            const SizedBox(height: 20),
+            GlassCard(
+              fillColor: AppTheme.accent.withValues(alpha: 0.06),
+              borderColor: AppTheme.accent.withValues(alpha: 0.22),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _aiStateColor().withValues(alpha: 0.12),
+                          borderRadius: AppTheme.chipRadius,
+                        ),
+                        child: Icon(Icons.groups_rounded,
+                            color: _aiStateColor(), size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Estimated Passenger Count',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Final trip count is locked from stable tracked visibility, not a single crossing event.',
+                              style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        provider.sessionActive || _aiState != 'idle'
+                            ? '$_estimatedPassengerCount'
+                            : '--',
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textPrimary,
+                          fontSize: 42,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1.4,
+                          height: 1,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Text(
+                          'Estimated Passenger Count',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Live: $_estimatedPassengerCountLive   |   Final: $_finalEstimatedPassengerCount',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.timer_rounded,
+                          label: 'Session Duration',
+                          value: _fmt(provider.tripDurationSeconds),
+                          color: AppTheme.accent,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.visibility_rounded,
+                          label: 'Visible Now',
+                          value: '$_currentDetectedCount',
+                          color: AppTheme.positive,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.bar_chart_rounded,
+                          label: 'Peak Visible',
+                          value: '$_peakVisibleCount',
+                          color: AppTheme.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.visibility_rounded,
-                  label: 'Visible Now',
-                  value: '$currentDetectedCount',
-                  color: AppTheme.positive,
-                ),
+            ),
+            const SizedBox(height: 20),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Safety Score',
+                      style: GoogleFonts.inter(
+                          color: AppTheme.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 86,
+                        height: 86,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              value: provider.safetyScore / 100,
+                              strokeWidth: 7,
+                              backgroundColor: AppTheme.border,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _scoreColor(provider.safetyScore),
+                              ),
+                              strokeCap: StrokeCap.round,
+                            ),
+                            Text(
+                              provider.safetyScore.toStringAsFixed(0),
+                              style: GoogleFonts.inter(
+                                color: _scoreColor(provider.safetyScore),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.safetyScore >= 85
+                                  ? 'Excellent - Keep it up!'
+                                  : provider.safetyScore >= 60
+                                      ? 'Caution - Check alerts'
+                                      : 'Poor - Needs attention',
+                              style: GoogleFonts.inter(
+                                color: _scoreColor(provider.safetyScore),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _DeductRow(
+                                'Yawn detection', '-1 pts', AppTheme.warning),
+                            const SizedBox(height: 4),
+                            _DeductRow(
+                                'Phone use event', '-2 pts', AppTheme.warning),
+                            const SizedBox(height: 4),
+                            _DeductRow('Drowsiness detection', '-5 pts',
+                                AppTheme.danger),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.sentiment_very_satisfied_rounded,
+                          label: 'Yawns',
+                          value: '$_yawnCount',
+                          color: AppTheme.warning,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.phone_android_rounded,
+                          label: 'Phone Use',
+                          value: '$_phoneUseCount',
+                          color: AppTheme.warning,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.remove_red_eye_rounded,
+                          label: 'Drowsiness',
+                          value: '$_drowsinessCount',
+                          color: AppTheme.danger,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.bar_chart_rounded,
-                  label: 'Peak Visible',
-                  value: '$peakVisibleCount',
-                  color: AppTheme.warning,
-                ),
-              ),
-            ],
-          ),
-          if (showModel || showVideo) ...[
+            ),
+            const SizedBox(height: 24),
+            const _SectionLabel('AI Safety Monitoring'),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (showModel)
-                  _InfoPill(
-                    icon: Icons.memory_rounded,
-                    label: 'Model',
-                    value: modelLabel,
-                  ),
-                if (showVideo)
-                  _InfoPill(
-                    icon: Icons.movie_creation_outlined,
-                    label: 'Preview source',
-                    value: videoLabel,
-                  ),
-              ],
+            AlertCard(
+              icon: Icons.sentiment_very_satisfied_rounded,
+              title: 'Yawn Detected',
+              subtitle: 'AI monitors mouth opening',
+              isActive: provider.yawnAlert,
+              alertColor: AppTheme.warning,
+              onSimulate: provider.sessionActive
+                  ? () => context
+                      .read<AppStateProvider>()
+                      .triggerYawn(!provider.yawnAlert)
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            AlertCard(
+              icon: Icons.phone_android_rounded,
+              title: 'Phone Use Detected',
+              subtitle: 'Vision model: handheld device detection',
+              isActive: provider.phoneUseAlert,
+              alertColor: AppTheme.warning,
+              onSimulate: provider.sessionActive
+                  ? () => context
+                      .read<AppStateProvider>()
+                      .triggerPhoneUse(!provider.phoneUseAlert)
+                  : null,
+            ),
+            const SizedBox(height: 10),
+            AlertCard(
+              icon: Icons.remove_red_eye_rounded,
+              title: 'Drowsiness Detected',
+              subtitle: 'AI monitors eye closure and head position',
+              isActive: provider.drowsinessAlert,
+              alertColor: AppTheme.danger,
+              onSimulate: provider.sessionActive
+                  ? () => context
+                      .read<AppStateProvider>()
+                      .triggerDrowsiness(!provider.drowsinessAlert)
+                  : null,
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PreviewMetric extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _PreviewMetric({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: AppTheme.textMuted,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            color: AppTheme.textPrimary,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: AppTheme.cardRadius,
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppTheme.accent, size: 15),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: AppTheme.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: GoogleFonts.inter(
-                  color: AppTheme.textPrimary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1163,119 +1009,84 @@ class _InfoPill extends StatelessWidget {
 class _SessionButton extends StatelessWidget {
   final bool isActive;
   final String aiState;
+  final bool isBusy;
 
-  const _SessionButton({required this.isActive, required this.aiState});
+  const _SessionButton({
+    required this.isActive,
+    required this.aiState,
+    required this.isBusy,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isRunning = isActive &&
-        aiState != 'stopped' &&
-        aiState != 'completed' &&
-        aiState != 'failed';
-    final isFinalizing =
+    final waitingForFinalize =
         isActive && (aiState == 'stopped' || aiState == 'completed');
-    final tone = isRunning
-        ? AppTheme.positive
-        : isFinalizing
-            ? AppTheme.warning
+    final color = isBusy
+        ? AppTheme.accent
+        : isActive
+            ? AppTheme.danger
             : AppTheme.positive;
-    final title = !isActive
-        ? 'Start Session'
-        : isRunning
-            ? 'Session Active'
-            : 'Finalize Session';
-    final subtitle = !isActive
-        ? 'Tap to begin AI monitoring'
-        : isRunning
-            ? 'Passenger preview and driver camera are live. Tap to stop when the trip ends.'
-            : 'AI stopped. Tap again to finalize tickets and close the trip.';
-    final badge = !isActive
-        ? 'READY'
-        : isRunning
-            ? 'ACTIVE'
-            : 'FINALIZE';
-    final leadingIcon = !isActive
-        ? Icons.play_circle_rounded
-        : isRunning
-            ? Icons.check_circle_rounded
-            : Icons.assignment_turned_in_rounded;
+    final title = isBusy
+        ? isActive
+            ? 'Syncing Session...'
+            : 'Starting Session...'
+        : !isActive
+            ? 'Start Session'
+            : waitingForFinalize
+                ? 'Finalize Trip'
+                : 'Stop Session';
+    final subtitle = isBusy
+        ? 'Please wait while the backend updates both AI systems'
+        : !isActive
+            ? 'Tap to begin passenger preview and driver monitoring'
+            : waitingForFinalize
+                ? 'AI stopped - tap again to finalize tickets'
+                : 'Tap to end session and stop both AI systems';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       decoration: BoxDecoration(
         borderRadius: AppTheme.cardRadius,
-        color: tone.withOpacity(isRunning ? 0.12 : 0.08),
-        border: Border.all(color: tone.withOpacity(0.5), width: 1.5),
-        boxShadow: isActive
-            ? [
-                BoxShadow(
-                  color: tone.withOpacity(
-                    AppTheme.isDarkMode ? 0.18 : 0.10,
-                  ),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ]
-            : [],
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: tone.withOpacity(AppTheme.isDarkMode ? 0.16 : 0.12),
-                borderRadius: AppTheme.cardRadius,
-              ),
-              child: Icon(leadingIcon, color: tone, size: 28),
-            ),
+            isBusy
+                ? SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  )
+                : Icon(
+                    !isActive
+                        ? Icons.play_circle_rounded
+                        : waitingForFinalize
+                            ? Icons.assignment_turned_in_rounded
+                            : Icons.stop_circle_rounded,
+                    color: color,
+                    size: 36,
+                  ),
             const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
                     style: GoogleFonts.inter(
-                      color: tone,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
+                        color: color,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800)),
+                Text(subtitle,
                     style: GoogleFonts.inter(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: tone.withOpacity(AppTheme.isDarkMode ? 0.16 : 0.12),
-                borderRadius: AppTheme.cardRadius,
-                border: Border.all(
-                  color: tone.withOpacity(AppTheme.isDarkMode ? 0.24 : 0.18),
-                ),
-              ),
-              child: Text(
-                badge,
-                style: GoogleFonts.inter(
-                  color: tone,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                ),
-              ),
+                        color: AppTheme.textSecondary, fontSize: 11)),
+              ],
             ),
           ],
         ),
@@ -1295,9 +1106,9 @@ class _DutyBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: AppTheme.chipRadius,
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(active ? 'ON DUTY' : 'OFF DUTY',
           style: GoogleFonts.inter(

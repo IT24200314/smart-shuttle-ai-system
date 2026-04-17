@@ -2,9 +2,12 @@
 .idea/
 *.iml
 
-# Model files
+# Model files (ignore all .pt by default)
 *.pt
 *.weights
+# Allow production model weights
+!/ai_models/driver_behavior/best.pt
+!/ai_models/passenger_counting/models/baseline/weights/best.pt
 
 # Output files
 *.avi
@@ -18,5 +21,9 @@ __pycache__/
 venv/
 .env
 
-# Secrets
-*serviceAccountKey.json
+# Local AI training artifacts
+/ai_models/passenger_counting/datasets/
+/ai_models/passenger_counting/runs/
+/ai_models/driver_behavior/dataset/
+/ai_models/driver_behavior/runs/
+/preprocessing/auto_label_preview.png

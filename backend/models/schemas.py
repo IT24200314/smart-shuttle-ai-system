@@ -10,7 +10,8 @@ UserStatus = Literal["active", "disabled", "deleted"]
 class StartTripRequest(BaseModel):
     bus_id: str
     trip_type: str
-    driver_id: Optional[str] = "driver-01"
+    driver_id: Optional[str] = None
+    driver_email: Optional[str] = None
 
 
 class EndTripRequest(BaseModel):

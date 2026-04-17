@@ -1,6 +1,3 @@
-import os
-import subprocess
-import sys
 import uuid
 from datetime import datetime
 
@@ -85,24 +82,38 @@ def login(req: AuthLoginRequest):
             date_str = datetime.now().strftime("%Y-%m-%d")
             doc_id = f"{user.get('email')}_{date_str}"
             doc_ref = db.collection("driver_behavior_logs").document(doc_id)
-
-            if not doc_ref.get().exists:
-                doc_ref.set(
-                    {
-                        "email": user.get("email"),
-                        "date": date_str,
-                        "number_of_ywan": 0,
-                        "number_of_usephone": 0,
-                        "number_of_drowsiness": 0,
-                        "safety_score": 100,
-                    }
+            existing = doc_ref.get()
+            existing_data = existing.to_dict() if existing.exists else {}
+            yawn_count = int(
+                existing_data.get(
+                    "number_of_ywan",
+                    existing_data.get("number_of_yawn", 0),
                 )
-
-            script_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "driver_camera.py",
+                or 0
             )
-            subprocess.Popen([sys.executable, script_path, user.get("email")])
+            doc_ref.set(
+                {
+                    "driver_id": user_id,
+                    "driver_name": user_name,
+                    "email": user.get("email"),
+                    "date": date_str,
+                    "number_of_yawn": yawn_count,
+                    "number_of_usephone": int(
+                        existing_data.get("number_of_usephone", 0) or 0
+                    ),
+                    "number_of_drowsiness": int(
+                        existing_data.get("number_of_drowsiness", 0) or 0
+                    ),
+                    "safety_score": int(existing_data.get("safety_score", 100) or 100),
+                    "session_active": bool(
+                        existing_data.get("session_active", False)
+                    ),
+                    "camera_active": bool(existing_data.get("camera_active", False)),
+                    "monitor_state": existing_data.get("monitor_state", "ready"),
+                    "updated_at": datetime.now().isoformat(),
+                },
+                merge=True,
+            )
 
         return {
             "message": "Login successful",
