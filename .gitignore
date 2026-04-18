@@ -21,6 +21,11 @@ __pycache__/
 venv/
 .env
 
+# Firebase/Service Account Keys (NEVER commit secrets)
+serviceAccountKey.json
+google-services.json
+firebase-config.json
+
 # Local AI training artifacts
 /ai_models/passenger_counting/datasets/
 /ai_models/passenger_counting/runs/
