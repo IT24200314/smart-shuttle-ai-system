@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
             headers: {'Content-Type': 'application/json'},
             body: json.encode({'email': email, 'password': password}),
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -107,7 +107,16 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      String message = 'Invalid email or password.';
+      String message;
+      if (res.statusCode == 503 || res.statusCode == 429) {
+        message =
+            'Server busy or Firestore quota exceeded. Please try again in a few minutes.';
+      } else if (res.statusCode == 500) {
+        message = 'Internal server error. Contact admin for assistance.';
+      } else {
+        message = 'Invalid email or password.';
+      }
+
       try {
         final payload = Map<String, dynamic>.from(json.decode(res.body));
         message = payload['detail']?.toString() ?? message;
@@ -123,13 +132,24 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+
+      String errorMsg =
+          'Cannot connect to server. Make sure the FastAPI backend is running.';
+      if (e is http.ClientException ||
+          e.toString().contains('SocketException')) {
+        errorMsg = 'No internet connection or backend is unreachable.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMsg =
+            'Connection timed out. The server is taking too long to respond.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Cannot connect to server. Make sure the FastAPI backend is running.',
+            errorMsg,
             style: GoogleFonts.inter(color: AppTheme.onAccent),
           ),
           backgroundColor: AppTheme.danger,

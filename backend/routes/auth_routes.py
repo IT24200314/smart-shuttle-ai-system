@@ -1,16 +1,18 @@
 import uuid
+import logging
+import traceback
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from google.api_core import exceptions as google_exceptions
 
 from models.schemas import AuthLoginRequest, AuthRegisterRequest
 from services.user_service import UserService, normalize_email
 from utils.firebase_config import db
 from utils.security import create_access_token, get_password_hash, verify_password
 
-
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 @router.post("/auth/register")
 def register(req: AuthRegisterRequest):
@@ -35,9 +37,15 @@ def register(req: AuthRegisterRequest):
         }
     except HTTPException:
         raise
+    except (google_exceptions.ResourceExhausted, google_exceptions.ServiceUnavailable) as e:
+        logger.error(f"Firestore service issue during registration: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Database service temporarily unavailable (quota or connection issue)",
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        logger.error(f"Registration failure: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/auth/login")
 def login(req: AuthLoginRequest):
@@ -73,6 +81,7 @@ def login(req: AuthLoginRequest):
             }
         )
 
+        # Fail fast if write hangs
         db.collection("users").document(user_id).set(
             {"last_login_at": datetime.now().isoformat()},
             merge=True,
@@ -82,8 +91,14 @@ def login(req: AuthLoginRequest):
             date_str = datetime.now().strftime("%Y-%m-%d")
             doc_id = f"{user.get('email')}_{date_str}"
             doc_ref = db.collection("driver_behavior_logs").document(doc_id)
-            existing = doc_ref.get()
-            existing_data = existing.to_dict() if existing.exists else {}
+            
+            try:
+                # Add timeout to prevent indefinite hang
+                existing = doc_ref.get(timeout=5)
+                existing_data = existing.to_dict() if existing.exists else {}
+            except Exception:
+                existing_data = {}
+
             yawn_count = int(
                 existing_data.get(
                     "number_of_ywan",
@@ -128,5 +143,12 @@ def login(req: AuthLoginRequest):
         }
     except HTTPException:
         raise
+    except (google_exceptions.ResourceExhausted, google_exceptions.ServiceUnavailable) as e:
+        logger.error(f"Firestore service issue during login: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Database service temporarily unavailable (quota or connection issue)",
+        )
     except Exception as e:
+        logger.error(f"Login failure: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

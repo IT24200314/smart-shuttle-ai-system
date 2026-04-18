@@ -1,0 +1,16 @@
+INFO:utils.firebase_config:Initializing Firebase Admin SDK...
+INFO:utils.firebase_config:Firebase Admin SDK initialized successfully for project smart-shuttle-198a1.
+INFO:     Started server process [34628]
+INFO:     Waiting for application startup.
+INFO:utils.firebase_config:Verifying Firestore connectivity...
+INFO:utils.firebase_config:Firestore connectivity verified.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+C:\suttle project\smart-shuttle-ai-system\.venv311\Lib\site-packages\google\cloud\firestore_v1\base_collection.py:317: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  return query.where(field_path, op_string, value)
+C:\suttle project\smart-shuttle-ai-system\backend\services\revenue_service.py:86: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  .where('date', '<=', selected_range.end_date)
+C:\suttle project\smart-shuttle-ai-system\backend\services\revenue_service.py:102: UserWarning: Detected filter using positional arguments. Prefer using the 'filter' keyword argument instead.
+  .where('date', '<=', end_date)
+INFO:utils.firebase_config:Verifying Firestore connectivity...
+INFO:utils.firebase_config:Firestore connectivity verified.

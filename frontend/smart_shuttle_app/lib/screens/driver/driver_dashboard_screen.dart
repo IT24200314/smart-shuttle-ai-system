@@ -329,17 +329,24 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         backgroundColor: AppTheme.surfaceHigh,
         title: Text('Start New Trip',
             style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: ['Morning', 'Evening', 'Special']
-              .map(
-                (tripType) => ListTile(
-                  title: Text(tripType,
-                      style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-                  onTap: () => Navigator.pop(ctx, tripType),
-                ),
-              )
-              .toList(),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: ['Morning', 'Evening', 'Special']
+                  .map(
+                    (tripType) => ListTile(
+                      title: Text(
+                        tripType,
+                        style: GoogleFonts.inter(color: AppTheme.textPrimary),
+                      ),
+                      onTap: () => Navigator.pop(ctx, tripType),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
         ),
       ),
     );
@@ -357,14 +364,19 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         backgroundColor: AppTheme.surfaceHigh,
         title: Text('Finalize Tickets',
             style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _TicketField(label: '75 LKR Tickets', controller: c75),
-            _TicketField(label: '100 LKR Tickets', controller: c100),
-            _TicketField(label: '150 LKR Tickets', controller: c150),
-            _TicketField(label: '200 LKR Tickets', controller: c200),
-          ],
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TicketField(label: '75 LKR Tickets', controller: c75),
+                _TicketField(label: '100 LKR Tickets', controller: c100),
+                _TicketField(label: '150 LKR Tickets', controller: c150),
+                _TicketField(label: '200 LKR Tickets', controller: c200),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(
@@ -574,433 +586,509 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           const SizedBox(width: 4),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            IgnorePointer(
-              ignoring: _sessionToggleInFlight,
-              child: AnimatedOpacity(
-                opacity: _sessionToggleInFlight ? 0.72 : 1,
-                duration: const Duration(milliseconds: 180),
-                child: GestureDetector(
-                  onTapDown: (_) => _btnCtrl.reverse(),
-                  onTapUp: (_) {
-                    _btnCtrl.forward();
-                    _handleSessionToggle();
-                  },
-                  onTapCancel: () => _btnCtrl.forward(),
-                  child: AnimatedBuilder(
-                    animation: _btnScale,
-                    builder: (_, child) =>
-                        Transform.scale(scale: _btnScale.value, child: child),
-                    child: _SessionButton(
-                      isActive: provider.sessionActive,
-                      aiState: _aiState,
-                      isBusy: _sessionToggleInFlight,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.smart_display_rounded,
-                          color: _aiStateColor(), size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Passenger AI: ${_aiState.toUpperCase()}'
-                          '${_activeTripId != null ? '  | Trip: $_activeTripId' : ''}'
-                          '${_activeTripType != null ? '  | Type: $_activeTripType' : ''}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.videocam_rounded,
-                        color: _driverMonitorColor(),
-                        size: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Driver Monitor: ${_driverMonitorLabel()}'
-                          '  | Camera: ${_driverCameraActive ? 'LIVE' : _driverBehaviorSessionActive ? 'INITIALIZING' : 'STANDBY'}'
-                          '  | Session: ${provider.sessionActive ? 'ACTIVE' : 'INACTIVE'}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_latestBehaviorLabel != null &&
-                      _latestBehaviorLabel!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color:
-                                _latestBehaviorColor().withValues(alpha: 0.12),
-                            borderRadius: AppTheme.chipRadius,
-                            border: Border.all(
-                              color: _latestBehaviorColor()
-                                  .withValues(alpha: 0.34),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontalPadding = constraints.maxWidth >= 900 ? 24.0 : 16.0;
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(horizontalPadding),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    IgnorePointer(
+                      ignoring: _sessionToggleInFlight,
+                      child: AnimatedOpacity(
+                        opacity: _sessionToggleInFlight ? 0.72 : 1,
+                        duration: const Duration(milliseconds: 180),
+                        child: GestureDetector(
+                          onTapDown: (_) => _btnCtrl.reverse(),
+                          onTapUp: (_) {
+                            _btnCtrl.forward();
+                            _handleSessionToggle();
+                          },
+                          onTapCancel: () => _btnCtrl.forward(),
+                          child: AnimatedBuilder(
+                            animation: _btnScale,
+                            builder: (_, child) => Transform.scale(
+                                scale: _btnScale.value, child: child),
+                            child: _SessionButton(
+                              isActive: provider.sessionActive,
+                              aiState: _aiState,
+                              isBusy: _sessionToggleInFlight,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    GlassCard(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Icon(
-                                _latestBehaviorIcon(),
-                                color: _latestBehaviorColor(),
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Live Alert: $_latestBehaviorLabel',
-                                style: GoogleFonts.inter(
-                                  color: _latestBehaviorColor(),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                              Icon(Icons.smart_display_rounded,
+                                  color: _aiStateColor(), size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Passenger AI: ${_aiState.toUpperCase()}'
+                                  '${_activeTripId != null ? '  | Trip: $_activeTripId' : ''}'
+                                  '${_activeTripType != null ? '  | Type: $_activeTripType' : ''}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        if (latestBehaviorTime != null)
-                          Text(
-                            'Updated $latestBehaviorTime',
-                            style: GoogleFonts.inter(
-                              color: AppTheme.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                  if (_sessionToggleInFlight) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Syncing session state across passenger preview and driver monitor...',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                  if (_driverCameraError != null &&
-                      _driverCameraError!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _driverCameraError!,
-                      style: GoogleFonts.inter(
-                        color: AppTheme.warning,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            GlassCard(
-              fillColor: AppTheme.accent.withValues(alpha: 0.06),
-              borderColor: AppTheme.accent.withValues(alpha: 0.22),
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: _aiStateColor().withValues(alpha: 0.12),
-                          borderRadius: AppTheme.chipRadius,
-                        ),
-                        child: Icon(Icons.groups_rounded,
-                            color: _aiStateColor(), size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Estimated Passenger Count',
-                              style: GoogleFonts.inter(
-                                color: AppTheme.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.videocam_rounded,
+                                color: _driverMonitorColor(),
+                                size: 18,
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Driver Monitor: ${_driverMonitorLabel()}'
+                                  '  | Camera: ${_driverCameraActive ? 'LIVE' : _driverBehaviorSessionActive ? 'INITIALIZING' : 'STANDBY'}'
+                                  '  | Session: ${provider.sessionActive ? 'ACTIVE' : 'INACTIVE'}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_latestBehaviorLabel != null &&
+                              _latestBehaviorLabel!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Container(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 360),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: _latestBehaviorColor()
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: AppTheme.chipRadius,
+                                    border: Border.all(
+                                      color: _latestBehaviorColor()
+                                          .withValues(alpha: 0.34),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _latestBehaviorIcon(),
+                                        color: _latestBehaviorColor(),
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'Live Alert: $_latestBehaviorLabel',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.inter(
+                                            color: _latestBehaviorColor(),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (latestBehaviorTime != null)
+                                  Text(
+                                    'Updated $latestBehaviorTime',
+                                    style: GoogleFonts.inter(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
+                          ],
+                          if (_sessionToggleInFlight) ...[
+                            const SizedBox(height: 8),
                             Text(
-                              'Final trip count is locked from stable tracked visibility, not a single crossing event.',
+                              'Syncing session state across passenger preview and driver monitor...',
                               style: GoogleFonts.inter(
                                 color: AppTheme.textSecondary,
                                 fontSize: 11,
-                                height: 1.4,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        provider.sessionActive || _aiState != 'idle'
-                            ? '$_estimatedPassengerCount'
-                            : '--',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textPrimary,
-                          fontSize: 42,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1.4,
-                          height: 1,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Text(
-                          'Estimated Passenger Count',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Live: $_estimatedPassengerCountLive   |   Final: $_finalEstimatedPassengerCount',
-                    style: GoogleFonts.inter(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.timer_rounded,
-                          label: 'Session Duration',
-                          value: _fmt(provider.tripDurationSeconds),
-                          color: AppTheme.accent,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.visibility_rounded,
-                          label: 'Visible Now',
-                          value: '$_currentDetectedCount',
-                          color: AppTheme.positive,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.bar_chart_rounded,
-                          label: 'Peak Visible',
-                          value: '$_peakVisibleCount',
-                          color: AppTheme.warning,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            GlassCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Safety Score',
-                      style: GoogleFonts.inter(
-                          color: AppTheme.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 86,
-                        height: 86,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              value: provider.safetyScore / 100,
-                              strokeWidth: 7,
-                              backgroundColor: AppTheme.border,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                _scoreColor(provider.safetyScore),
-                              ),
-                              strokeCap: StrokeCap.round,
-                            ),
-                            Text(
-                              provider.safetyScore.toStringAsFixed(0),
-                              style: GoogleFonts.inter(
-                                color: _scoreColor(provider.safetyScore),
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              provider.safetyScore >= 85
-                                  ? 'Excellent - Keep it up!'
-                                  : provider.safetyScore >= 60
-                                      ? 'Caution - Check alerts'
-                                      : 'Poor - Needs attention',
-                              style: GoogleFonts.inter(
-                                color: _scoreColor(provider.safetyScore),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                          if (_driverCameraError != null &&
+                              _driverCameraError!.trim().isNotEmpty) ...[
                             const SizedBox(height: 8),
-                            _DeductRow(
-                                'Yawn detection', '-1 pts', AppTheme.warning),
-                            const SizedBox(height: 4),
-                            _DeductRow(
-                                'Phone use event', '-2 pts', AppTheme.warning),
-                            const SizedBox(height: 4),
-                            _DeductRow('Drowsiness detection', '-5 pts',
-                                AppTheme.danger),
+                            Text(
+                              _driverCameraError!,
+                              style: GoogleFonts.inter(
+                                color: AppTheme.warning,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.sentiment_very_satisfied_rounded,
-                          label: 'Yawns',
-                          value: '$_yawnCount',
-                          color: AppTheme.warning,
-                        ),
+                    ),
+                    const SizedBox(height: 20),
+                    GlassCard(
+                      fillColor: AppTheme.accent.withValues(alpha: 0.06),
+                      borderColor: AppTheme.accent.withValues(alpha: 0.22),
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color:
+                                      _aiStateColor().withValues(alpha: 0.12),
+                                  borderRadius: AppTheme.chipRadius,
+                                ),
+                                child: Icon(Icons.groups_rounded,
+                                    color: _aiStateColor(), size: 18),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Estimated Passenger Count',
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Final trip count is locked from stable tracked visibility, not a single crossing event.',
+                                      style: GoogleFonts.inter(
+                                        color: AppTheme.textSecondary,
+                                        fontSize: 11,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final compactCount = constraints.maxWidth < 420;
+                              final countLabel = Text(
+                                'Estimated Passenger Count',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              );
+                              final countValue = Text(
+                                provider.sessionActive || _aiState != 'idle'
+                                    ? '$_estimatedPassengerCount'
+                                    : '--',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -1.4,
+                                  height: 1,
+                                ),
+                              );
+
+                              if (compactCount) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    countValue,
+                                    const SizedBox(height: 8),
+                                    countLabel,
+                                  ],
+                                );
+                              }
+
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  countValue,
+                                  const SizedBox(width: 10),
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 5),
+                                    child: countLabel,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final compactBreakdown =
+                                  constraints.maxWidth < 360;
+                              final liveText = Text(
+                                'Live: $_estimatedPassengerCountLive',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                              final finalText = Text(
+                                'Final: $_finalEstimatedPassengerCount',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+
+                              if (compactBreakdown) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    liveText,
+                                    const SizedBox(height: 4),
+                                    finalText,
+                                  ],
+                                );
+                              }
+
+                              return Wrap(
+                                spacing: 12,
+                                runSpacing: 4,
+                                children: [
+                                  liveText,
+                                  finalText,
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _ResponsiveTileRow(
+                            children: [
+                              _StatTile(
+                                icon: Icons.timer_rounded,
+                                label: 'Session Duration',
+                                value: _fmt(provider.tripDurationSeconds),
+                                color: AppTheme.accent,
+                              ),
+                              _StatTile(
+                                icon: Icons.visibility_rounded,
+                                label: 'Visible Now',
+                                value: '$_currentDetectedCount',
+                                color: AppTheme.positive,
+                              ),
+                              _StatTile(
+                                icon: Icons.bar_chart_rounded,
+                                label: 'Peak Visible',
+                                value: '$_peakVisibleCount',
+                                color: AppTheme.warning,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.phone_android_rounded,
-                          label: 'Phone Use',
-                          value: '$_phoneUseCount',
-                          color: AppTheme.warning,
-                        ),
+                    ),
+                    const SizedBox(height: 20),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Safety Score',
+                              style: GoogleFonts.inter(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 14),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final scoreDial = SizedBox(
+                                width: 86,
+                                height: 86,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      value: provider.safetyScore / 100,
+                                      strokeWidth: 7,
+                                      backgroundColor: AppTheme.border,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        _scoreColor(provider.safetyScore),
+                                      ),
+                                      strokeCap: StrokeCap.round,
+                                    ),
+                                    Text(
+                                      provider.safetyScore.toStringAsFixed(0),
+                                      style: GoogleFonts.inter(
+                                        color:
+                                            _scoreColor(provider.safetyScore),
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              final scoreDetails = Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    provider.safetyScore >= 85
+                                        ? 'Excellent - Keep it up!'
+                                        : provider.safetyScore >= 60
+                                            ? 'Caution - Check alerts'
+                                            : 'Poor - Needs attention',
+                                    style: GoogleFonts.inter(
+                                      color: _scoreColor(provider.safetyScore),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _DeductRow('Yawn detection', '-1 pts',
+                                      AppTheme.warning),
+                                  const SizedBox(height: 4),
+                                  _DeductRow('Phone use event', '-2 pts',
+                                      AppTheme.warning),
+                                  const SizedBox(height: 4),
+                                  _DeductRow(
+                                    'Drowsiness detection',
+                                    '-5 pts',
+                                    AppTheme.danger,
+                                  ),
+                                ],
+                              );
+
+                              if (constraints.maxWidth < 520) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    scoreDial,
+                                    const SizedBox(height: 16),
+                                    scoreDetails,
+                                  ],
+                                );
+                              }
+
+                              return Row(
+                                children: [
+                                  scoreDial,
+                                  const SizedBox(width: 18),
+                                  Expanded(child: scoreDetails),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          _ResponsiveTileRow(
+                            children: [
+                              _StatTile(
+                                icon: Icons.sentiment_very_satisfied_rounded,
+                                label: 'Yawns',
+                                value: '$_yawnCount',
+                                color: AppTheme.warning,
+                              ),
+                              _StatTile(
+                                icon: Icons.phone_android_rounded,
+                                label: 'Phone Use',
+                                value: '$_phoneUseCount',
+                                color: AppTheme.warning,
+                              ),
+                              _StatTile(
+                                icon: Icons.remove_red_eye_rounded,
+                                label: 'Drowsiness',
+                                value: '$_drowsinessCount',
+                                color: AppTheme.danger,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StatTile(
-                          icon: Icons.remove_red_eye_rounded,
-                          label: 'Drowsiness',
-                          value: '$_drowsinessCount',
-                          color: AppTheme.danger,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 24),
+                    const _SectionLabel('AI Safety Monitoring'),
+                    const SizedBox(height: 12),
+                    AlertCard(
+                      icon: Icons.sentiment_very_satisfied_rounded,
+                      title: 'Yawn Detected',
+                      subtitle: 'AI monitors mouth opening',
+                      isActive: provider.yawnAlert,
+                      alertColor: AppTheme.warning,
+                      onSimulate: provider.sessionActive
+                          ? () => context
+                              .read<AppStateProvider>()
+                              .triggerYawn(!provider.yawnAlert)
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    AlertCard(
+                      icon: Icons.phone_android_rounded,
+                      title: 'Phone Use Detected',
+                      subtitle: 'Vision model: handheld device detection',
+                      isActive: provider.phoneUseAlert,
+                      alertColor: AppTheme.warning,
+                      onSimulate: provider.sessionActive
+                          ? () => context
+                              .read<AppStateProvider>()
+                              .triggerPhoneUse(!provider.phoneUseAlert)
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    AlertCard(
+                      icon: Icons.remove_red_eye_rounded,
+                      title: 'Drowsiness Detected',
+                      subtitle: 'AI monitors eye closure and head position',
+                      isActive: provider.drowsinessAlert,
+                      alertColor: AppTheme.danger,
+                      onSimulate: provider.sessionActive
+                          ? () => context
+                              .read<AppStateProvider>()
+                              .triggerDrowsiness(!provider.drowsinessAlert)
+                          : null,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-            const _SectionLabel('AI Safety Monitoring'),
-            const SizedBox(height: 12),
-            AlertCard(
-              icon: Icons.sentiment_very_satisfied_rounded,
-              title: 'Yawn Detected',
-              subtitle: 'AI monitors mouth opening',
-              isActive: provider.yawnAlert,
-              alertColor: AppTheme.warning,
-              onSimulate: provider.sessionActive
-                  ? () => context
-                      .read<AppStateProvider>()
-                      .triggerYawn(!provider.yawnAlert)
-                  : null,
-            ),
-            const SizedBox(height: 10),
-            AlertCard(
-              icon: Icons.phone_android_rounded,
-              title: 'Phone Use Detected',
-              subtitle: 'Vision model: handheld device detection',
-              isActive: provider.phoneUseAlert,
-              alertColor: AppTheme.warning,
-              onSimulate: provider.sessionActive
-                  ? () => context
-                      .read<AppStateProvider>()
-                      .triggerPhoneUse(!provider.phoneUseAlert)
-                  : null,
-            ),
-            const SizedBox(height: 10),
-            AlertCard(
-              icon: Icons.remove_red_eye_rounded,
-              title: 'Drowsiness Detected',
-              subtitle: 'AI monitors eye closure and head position',
-              isActive: provider.drowsinessAlert,
-              alertColor: AppTheme.danger,
-              onSimulate: provider.sessionActive
-                  ? () => context
-                      .read<AppStateProvider>()
-                      .triggerDrowsiness(!provider.drowsinessAlert)
-                  : null,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1052,10 +1140,10 @@ class _SessionButton extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            isBusy
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 540;
+            final leading = isBusy
                 ? SizedBox(
                     width: 30,
                     height: 30,
@@ -1072,23 +1160,54 @@ class _SessionButton extends StatelessWidget {
                             : Icons.stop_circle_rounded,
                     color: color,
                     size: 36,
-                  ),
-            const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+                  );
+            final content = Column(
+              crossAxisAlignment: compact
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title,
-                    style: GoogleFonts.inter(
-                        color: color,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800)),
-                Text(subtitle,
-                    style: GoogleFonts.inter(
-                        color: AppTheme.textSecondary, fontSize: 11)),
+                Text(
+                  title,
+                  textAlign: compact ? TextAlign.center : TextAlign.start,
+                  style: GoogleFonts.inter(
+                    color: color,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  textAlign: compact ? TextAlign.center : TextAlign.start,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
               ],
-            ),
-          ],
+            );
+
+            if (compact) {
+              return Column(
+                children: [
+                  leading,
+                  const SizedBox(height: 12),
+                  content,
+                ],
+              );
+            }
+
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                leading,
+                const SizedBox(width: 14),
+                Flexible(child: content),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1113,6 +1232,44 @@ class _DutyBadge extends StatelessWidget {
       child: Text(active ? 'ON DUTY' : 'OFF DUTY',
           style: GoogleFonts.inter(
               color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _ResponsiveTileRow extends StatelessWidget {
+  final List<Widget> children;
+
+  const _ResponsiveTileRow({
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 12.0;
+
+        if (constraints.maxWidth < 640) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i != children.length - 1) SizedBox(height: spacing),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              Expanded(child: children[i]),
+              if (i != children.length - 1) SizedBox(width: spacing),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -1146,7 +1303,7 @@ class _StatTile extends StatelessWidget {
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text(label,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                   color: AppTheme.textSecondary, fontSize: 10)),

@@ -299,7 +299,17 @@ class _AdminLostFoundScreenState extends State<AdminLostFoundScreen> {
                                       children: [
                                         Expanded(child: content),
                                         const SizedBox(width: 16),
-                                        SizedBox(width: 260, child: actions),
+                                        Flexible(
+                                          child: Align(
+                                            alignment: Alignment.topRight,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 260,
+                                              ),
+                                              child: actions,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     );
                                   },
@@ -387,7 +397,15 @@ class _LostFoundHero extends StatelessWidget {
             children: [
               const Expanded(child: _HeroText()),
               const SizedBox(width: 12),
-              SizedBox(width: 430, child: summary),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: summary,
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -570,19 +588,26 @@ class _MetaItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: AppTheme.textMuted),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: GoogleFonts.inter(
-            color: AppTheme.textMuted,
-            fontSize: 11,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppTheme.textMuted),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: AppTheme.textMuted,
+                fontSize: 11,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -1,0 +1,13 @@
+INFO:     127.0.0.1:6297 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6296 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6654 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6654 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6654 - "GET /admin/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3199 - "GET /dashboard/revenue-summary?range=today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3199 - "GET /dashboard/revenue-summary?range=last7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2622 - "OPTIONS /feedback HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2622 - "GET /feedback HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2622 - "OPTIONS /users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2622 - "GET /users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13548 - "GET /health/db HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13547 - "POST /auth/login HTTP/1.1" 200 OK

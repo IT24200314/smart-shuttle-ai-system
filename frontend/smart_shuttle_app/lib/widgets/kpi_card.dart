@@ -50,6 +50,7 @@ class KpiCard extends StatelessWidget {
       padding: EdgeInsets.all(cardPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -117,16 +118,19 @@ class KpiCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: compact ? 7 : 10),
-          Text(
-            subtitle ?? '',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              color: AppTheme.textSecondary,
-              fontSize: compact ? 11.5 : 12,
-              height: 1.4,
+          if ((subtitle ?? '').isNotEmpty)
+            Flexible(
+              child: Text(
+                subtitle!,
+                maxLines: compact ? 2 : 3,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary,
+                  fontSize: compact ? 11.5 : 12,
+                  height: 1.4,
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );

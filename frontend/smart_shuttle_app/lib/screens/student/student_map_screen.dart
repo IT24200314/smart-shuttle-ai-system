@@ -483,7 +483,11 @@ class _BottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context).size;
+    final maxSheetHeight = media.height * (media.width < 700 ? 0.62 : 0.54);
+
     return Container(
+      constraints: BoxConstraints(maxHeight: maxSheetHeight),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -491,7 +495,7 @@ class _BottomSheet extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -531,48 +535,46 @@ class _BottomSheet extends StatelessWidget {
               const SizedBox(height: 10),
               GlassCard(
                 padding: const EdgeInsets.all(14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Estimated Arrival',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textSecondary, fontSize: 11)),
-                          const SizedBox(height: 6),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('${provider.etaMinutes}',
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stackStats = constraints.maxWidth < 360;
+
+                    final etaBlock = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Estimated Arrival',
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary, fontSize: 11)),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('${provider.etaMinutes}',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1,
+                                )),
+                            const SizedBox(width: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: Text('min',
                                   style: GoogleFonts.inter(
-                                    color: AppTheme.textPrimary,
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1,
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                   )),
-                              const SizedBox(width: 4),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 5),
-                                child: Text('min',
-                                    style: GoogleFonts.inter(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    )),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text('to Main Gate stop',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textMuted, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text('to Main Gate stop',
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textMuted, fontSize: 11)),
+                      ],
+                    );
+                    final crowdBlock = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Crowd',
@@ -581,8 +583,28 @@ class _BottomSheet extends StatelessWidget {
                         const SizedBox(height: 8),
                         CrowdDensityBadge(density: provider.crowdDensity),
                       ],
-                    ),
-                  ],
+                    );
+
+                    if (stackStats) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          etaBlock,
+                          const SizedBox(height: 14),
+                          crowdBlock,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: etaBlock),
+                        const SizedBox(width: 10),
+                        crowdBlock,
+                      ],
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 10),

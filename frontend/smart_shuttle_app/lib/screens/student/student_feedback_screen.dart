@@ -444,26 +444,40 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
                                         fontWeight: FontWeight.w700),
                                   ),
                                   const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: List.generate(
-                                      5,
-                                      (index) => IconButton(
-                                        iconSize: 40,
-                                        icon: Icon(
-                                          index < _rating
-                                              ? Icons.star_rounded
-                                              : Icons.star_outline_rounded,
-                                          color: index < _rating
-                                              ? AppTheme.warning
-                                              : AppTheme.borderStrong,
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final iconSize =
+                                          constraints.maxWidth < 360
+                                              ? 34.0
+                                              : 40.0;
+
+                                      return Wrap(
+                                        alignment: WrapAlignment.center,
+                                        spacing: 4,
+                                        runSpacing: 4,
+                                        children: List.generate(
+                                          5,
+                                          (index) => IconButton(
+                                            iconSize: iconSize,
+                                            constraints: const BoxConstraints(),
+                                            padding: const EdgeInsets.all(6),
+                                            icon: Icon(
+                                              index < _rating
+                                                  ? Icons.star_rounded
+                                                  : Icons.star_outline_rounded,
+                                              color: index < _rating
+                                                  ? AppTheme.warning
+                                                  : AppTheme.borderStrong,
+                                            ),
+                                            onPressed: _isSaving
+                                                ? null
+                                                : () => setState(
+                                                      () => _rating = index + 1,
+                                                    ),
+                                          ),
                                         ),
-                                        onPressed: _isSaving
-                                            ? null
-                                            : () => setState(
-                                                () => _rating = index + 1),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   ),
                                   Text(
                                     _rating == 0

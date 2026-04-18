@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +19,8 @@ void main() async {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 50),
+              const Icon(Icons.error_outline,
+                  color: Color(0xFFEF4444), size: 50),
               const SizedBox(height: 16),
               const Text(
                 'An error occurred during startup!',
@@ -42,11 +44,19 @@ void main() async {
   };
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+    final options = DefaultFirebaseOptions.currentPlatform;
+    debugPrint(
+      'Initializing Firebase for ${kIsWeb ? 'web' : defaultTargetPlatform.name} with project ${options.projectId}',
     );
-  } catch (e) {
+    await Firebase.initializeApp(
+      options: options,
+    );
+    debugPrint(
+      'Firebase initialized successfully for project ${Firebase.app().options.projectId}',
+    );
+  } catch (e, stackTrace) {
     debugPrint('Firebase Initialization Warning: $e');
+    debugPrintStack(stackTrace: stackTrace);
   }
 
   // Load persisted theme before building the widget tree.

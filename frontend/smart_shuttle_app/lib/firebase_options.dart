@@ -12,6 +12,8 @@ class DefaultFirebaseOptions {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
+      case TargetPlatform.windows:
+        return windows;
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not configured for this platform.',
@@ -20,13 +22,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyD79jqbWA26j63wigM2ZJoTa0OhLJ3Em24',
-    appId: '1:274381434085:web:7ecb76f3efbd586bfc380c',
-    messagingSenderId: '274381434085',
-    projectId: 'system-audit-logs',
-    authDomain: 'system-audit-logs.firebaseapp.com',
-    storageBucket: 'system-audit-logs.firebasestorage.app',
-    measurementId: 'G-RJHSG57PYN',
+    apiKey: 'AIzaSyAZOw-F2Anmqr49D6p29IxMHGgSOcHjyQQ',
+    appId: '1:809923084542:web:5c2fb7d2e77ec3e9dda5af',
+    messagingSenderId: '809923084542',
+    projectId: 'smart-shuttle-198a1',
+    authDomain: 'smart-shuttle-198a1.firebaseapp.com',
+    storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -34,6 +35,15 @@ class DefaultFirebaseOptions {
     appId: '1:809923084542:android:5d3e54df9e42b882dda5af',
     messagingSenderId: '809923084542',
     projectId: 'smart-shuttle-198a1',
+    storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyAZOw-F2Anmqr49D6p29IxMHGgSOcHjyQQ',
+    appId: '1:809923084542:web:5c2fb7d2e77ec3e9dda5af',
+    messagingSenderId: '809923084542',
+    projectId: 'smart-shuttle-198a1',
+    authDomain: 'smart-shuttle-198a1.firebaseapp.com',
     storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
   );
 }

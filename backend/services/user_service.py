@@ -51,7 +51,7 @@ class UserService:
             db.collection("users")
             .where(filter=FieldFilter("email", "==", normalized_email))
             .limit(1)
-            .get()
+            .get(timeout=5)
         )
         if not docs:
             return None
@@ -60,7 +60,7 @@ class UserService:
 
     @staticmethod
     def get_user_or_404(user_id: str) -> tuple[str, dict]:
-        doc = db.collection("users").document(user_id).get()
+        doc = db.collection("users").document(user_id).get(timeout=5)
         if not doc.exists:
             raise HTTPException(status_code=404, detail="User not found")
         return doc.id, doc.to_dict() or {}
@@ -76,7 +76,7 @@ class UserService:
         search_filter = (search or "").strip().lower()
 
         users: list[UserResponse] = []
-        for doc in db.collection("users").stream():
+        for doc in db.collection("users").stream(timeout=5):
             data = doc.to_dict() or {}
             email = str(data.get("email", ""))
             name = str(data.get("name", ""))

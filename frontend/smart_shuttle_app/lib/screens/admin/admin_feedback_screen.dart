@@ -398,92 +398,110 @@ class _AdminFeedbackScreenState extends State<AdminFeedbackScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: 260,
-                child: TextField(
-                  controller: _tripIdCtrl,
-                  style: GoogleFonts.inter(color: AppTheme.textPrimary),
-                  decoration: const InputDecoration(
-                    labelText: 'Trip ID',
-                    prefixIcon: Icon(Icons.directions_bus_filled_rounded),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stackControls = constraints.maxWidth < 640;
+              final tripFieldWidth =
+                  stackControls ? constraints.maxWidth : 260.0;
+              final ratingFieldWidth =
+                  stackControls ? constraints.maxWidth : 160.0;
+              final actionWidth = stackControls ? constraints.maxWidth : null;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: tripFieldWidth,
+                    child: TextField(
+                      controller: _tripIdCtrl,
+                      style: GoogleFonts.inter(color: AppTheme.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Trip ID',
+                        prefixIcon: Icon(Icons.directions_bus_filled_rounded),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<int?>(
-                  initialValue: _ratingMin,
-                  dropdownColor: AppTheme.surfaceHigh,
-                  decoration: const InputDecoration(
-                    labelText: 'Min Rating',
-                    prefixIcon: Icon(Icons.star_outline_rounded),
+                  SizedBox(
+                    width: ratingFieldWidth,
+                    child: DropdownButtonFormField<int?>(
+                      initialValue: _ratingMin,
+                      dropdownColor: AppTheme.surfaceHigh,
+                      decoration: const InputDecoration(
+                        labelText: 'Min Rating',
+                        prefixIcon: Icon(Icons.star_outline_rounded),
+                      ),
+                      items: const [
+                        DropdownMenuItem<int?>(value: null, child: Text('Any')),
+                        DropdownMenuItem<int?>(value: 1, child: Text('1+')),
+                        DropdownMenuItem<int?>(value: 2, child: Text('2+')),
+                        DropdownMenuItem<int?>(value: 3, child: Text('3+')),
+                        DropdownMenuItem<int?>(value: 4, child: Text('4+')),
+                        DropdownMenuItem<int?>(value: 5, child: Text('5')),
+                      ],
+                      onChanged: (value) => setState(() => _ratingMin = value),
+                    ),
                   ),
-                  items: const [
-                    DropdownMenuItem<int?>(value: null, child: Text('Any')),
-                    DropdownMenuItem<int?>(value: 1, child: Text('1+')),
-                    DropdownMenuItem<int?>(value: 2, child: Text('2+')),
-                    DropdownMenuItem<int?>(value: 3, child: Text('3+')),
-                    DropdownMenuItem<int?>(value: 4, child: Text('4+')),
-                    DropdownMenuItem<int?>(value: 5, child: Text('5')),
-                  ],
-                  onChanged: (value) => setState(() => _ratingMin = value),
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<int?>(
-                  initialValue: _ratingMax,
-                  dropdownColor: AppTheme.surfaceHigh,
-                  decoration: const InputDecoration(
-                    labelText: 'Max Rating',
-                    prefixIcon: Icon(Icons.star_half_rounded),
+                  SizedBox(
+                    width: ratingFieldWidth,
+                    child: DropdownButtonFormField<int?>(
+                      initialValue: _ratingMax,
+                      dropdownColor: AppTheme.surfaceHigh,
+                      decoration: const InputDecoration(
+                        labelText: 'Max Rating',
+                        prefixIcon: Icon(Icons.star_half_rounded),
+                      ),
+                      items: const [
+                        DropdownMenuItem<int?>(value: null, child: Text('Any')),
+                        DropdownMenuItem<int?>(value: 1, child: Text('1')),
+                        DropdownMenuItem<int?>(value: 2, child: Text('2')),
+                        DropdownMenuItem<int?>(value: 3, child: Text('3')),
+                        DropdownMenuItem<int?>(value: 4, child: Text('4')),
+                        DropdownMenuItem<int?>(value: 5, child: Text('5')),
+                      ],
+                      onChanged: (value) => setState(() => _ratingMax = value),
+                    ),
                   ),
-                  items: const [
-                    DropdownMenuItem<int?>(value: null, child: Text('Any')),
-                    DropdownMenuItem<int?>(value: 1, child: Text('1')),
-                    DropdownMenuItem<int?>(value: 2, child: Text('2')),
-                    DropdownMenuItem<int?>(value: 3, child: Text('3')),
-                    DropdownMenuItem<int?>(value: 4, child: Text('4')),
-                    DropdownMenuItem<int?>(value: 5, child: Text('5')),
-                  ],
-                  onChanged: (value) => setState(() => _ratingMax = value),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _pickDate(true),
-                icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                label: Text(
-                  _startDate == null
-                      ? 'Start Date'
-                      : DateFormat('MMM d, yyyy').format(_startDate!),
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _pickDate(false),
-                icon: const Icon(Icons.event_available_rounded, size: 16),
-                label: Text(
-                  _endDate == null
-                      ? 'End Date'
-                      : DateFormat('MMM d, yyyy').format(_endDate!),
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
+                  SizedBox(
+                    width: actionWidth,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickDate(true),
+                      icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                      label: Text(
+                        _startDate == null
+                            ? 'Start Date'
+                            : DateFormat('MMM d, yyyy').format(_startDate!),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: actionWidth,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickDate(false),
+                      icon: const Icon(Icons.event_available_rounded, size: 16),
+                      label: Text(
+                        _endDate == null
+                            ? 'End Date'
+                            : DateFormat('MMM d, yyyy').format(_endDate!),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               ElevatedButton.icon(
                 onPressed: _loadFeedback,
                 icon: const Icon(Icons.filter_alt_rounded, size: 18),
                 label: const Text('Apply Filters'),
               ),
-              const SizedBox(width: 10),
               OutlinedButton(
                 onPressed: _resetFilters,
                 child: const Text('Reset'),
@@ -522,55 +540,67 @@ class _TripBreakdown extends StatelessWidget {
             ),
           )
         else
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: groupedByTrip.entries.map((entry) {
-              final tripItems = entry.value;
-              final tripAverage = tripItems.fold<double>(
-                    0,
-                    (sum, item) =>
-                        sum + ((item['rating'] ?? 0) as num).toDouble(),
-                  ) /
-                  tripItems.length;
-              final first = tripItems.first;
-              return SizedBox(
-                width: 260,
-                child: GlassCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.key,
-                        style: GoogleFonts.inter(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${first['trip_type'] ?? 'Trip'}  •  ${tripItems.length} review(s)',
-                        style: GoogleFonts.inter(
-                            color: AppTheme.textSecondary, fontSize: 12),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 560
+                  ? constraints.maxWidth
+                  : constraints.maxWidth < 940
+                      ? (constraints.maxWidth - 12) / 2
+                      : 280.0;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: groupedByTrip.entries.map((entry) {
+                  final tripItems = entry.value;
+                  final tripAverage = tripItems.fold<double>(
+                        0,
+                        (sum, item) =>
+                            sum + ((item['rating'] ?? 0) as num).toDouble(),
+                      ) /
+                      tripItems.length;
+                  final first = tripItems.first;
+                  return SizedBox(
+                    width: cardWidth,
+                    child: GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.star_rounded,
-                               color: AppTheme.warning, size: 18),
-                          const SizedBox(width: 6),
                           Text(
-                            tripAverage.toStringAsFixed(2),
+                            entry.key,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
                                 color: AppTheme.textPrimary,
                                 fontWeight: FontWeight.w700),
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${first['trip_type'] ?? 'Trip'}  •  ${tripItems.length} review(s)',
+                            style: GoogleFonts.inter(
+                                color: AppTheme.textSecondary, fontSize: 12),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Icon(Icons.star_rounded,
+                                  color: AppTheme.warning, size: 18),
+                              const SizedBox(width: 6),
+                              Text(
+                                tripAverage.toStringAsFixed(2),
+                                style: GoogleFonts.inter(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
       ],
     );
@@ -625,63 +655,146 @@ class _LatestComments extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: (feedback['rating'] ?? 0) <= 2
-                              ? AppTheme.danger
-                              : AppTheme.warning,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${feedback['rating'] ?? 0}',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.onAccent,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.star_rounded,
-                                color: AppTheme.onAccent, size: 14),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              feedback['student_name']?.toString().isNotEmpty ==
-                                      true
-                                  ? feedback['student_name'].toString()
-                                  : feedback['student_id']?.toString() ??
-                                      'Student',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textPrimary,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${feedback['trip_type'] ?? 'Trip'} • ${feedback['trip_id'] ?? ''}',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textSecondary, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final stackHeader = constraints.maxWidth < 520;
+                      final timestamp = Text(
                         formatDate(feedback['updated_at']?.toString() ??
                             feedback['created_at']?.toString()),
                         style: GoogleFonts.inter(
                             color: AppTheme.textMuted, fontSize: 11),
-                      ),
-                    ],
+                      );
+
+                      if (stackHeader) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (feedback['rating'] ?? 0) <= 2
+                                        ? AppTheme.danger
+                                        : AppTheme.warning,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${feedback['rating'] ?? 0}',
+                                        style: GoogleFonts.inter(
+                                            color: AppTheme.onAccent,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.star_rounded,
+                                          color: AppTheme.onAccent, size: 14),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        feedback['student_name']
+                                                    ?.toString()
+                                                    .isNotEmpty ==
+                                                true
+                                            ? feedback['student_name']
+                                                .toString()
+                                            : feedback['student_id']
+                                                    ?.toString() ??
+                                                'Student',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                            color: AppTheme.textPrimary,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${feedback['trip_type'] ?? 'Trip'} | ${feedback['trip_id'] ?? ''}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.inter(
+                                            color: AppTheme.textSecondary,
+                                            fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            timestamp,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: (feedback['rating'] ?? 0) <= 2
+                                  ? AppTheme.danger
+                                  : AppTheme.warning,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${feedback['rating'] ?? 0}',
+                                  style: GoogleFonts.inter(
+                                      color: AppTheme.onAccent,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.star_rounded,
+                                    color: AppTheme.onAccent, size: 14),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  feedback['student_name']
+                                              ?.toString()
+                                              .isNotEmpty ==
+                                          true
+                                      ? feedback['student_name'].toString()
+                                      : feedback['student_id']?.toString() ??
+                                          'Student',
+                                  style: GoogleFonts.inter(
+                                      color: AppTheme.textPrimary,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${feedback['trip_type'] ?? 'Trip'} • ${feedback['trip_id'] ?? ''}',
+                                  style: GoogleFonts.inter(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          timestamp,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 14),
                   Text(

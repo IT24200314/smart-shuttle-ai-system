@@ -209,8 +209,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           style: GoogleFonts.inter(
               color: AppTheme.textPrimary, fontWeight: FontWeight.w700),
         ),
-        content: SizedBox(
-          width: 420,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
@@ -426,86 +426,110 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 280,
-                                child: TextField(
-                                  controller: _searchCtrl,
-                                  style: GoogleFonts.inter(
-                                      color: AppTheme.textPrimary),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Search name, email, or id',
-                                    prefixIcon: Icon(Icons.search_rounded),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final stackControls = constraints.maxWidth < 680;
+                              final searchWidth =
+                                  stackControls ? constraints.maxWidth : 280.0;
+                              final filterWidth =
+                                  stackControls ? constraints.maxWidth : 170.0;
+                              final actionWidth =
+                                  stackControls ? constraints.maxWidth : null;
+
+                              return Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  SizedBox(
+                                    width: searchWidth,
+                                    child: TextField(
+                                      controller: _searchCtrl,
+                                      style: GoogleFonts.inter(
+                                          color: AppTheme.textPrimary),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Search name, email, or id',
+                                        prefixIcon: Icon(Icons.search_rounded),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 160,
-                                child: DropdownButtonFormField<String?>(
-                                  initialValue: _roleFilter,
-                                  dropdownColor: AppTheme.surfaceHigh,
-                                  decoration:
-                                      const InputDecoration(labelText: 'Role'),
-                                  items: const [
-                                    DropdownMenuItem<String?>(
-                                        value: null, child: Text('All roles')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'student',
-                                        child: Text('Student')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'driver', child: Text('Driver')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'admin', child: Text('Admin')),
-                                  ],
-                                  onChanged: (value) =>
-                                      setState(() => _roleFilter = value),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 170,
-                                child: DropdownButtonFormField<String?>(
-                                  initialValue: _statusFilter,
-                                  dropdownColor: AppTheme.surfaceHigh,
-                                  decoration: const InputDecoration(
-                                      labelText: 'Status'),
-                                  items: const [
-                                    DropdownMenuItem<String?>(
-                                        value: null,
-                                        child: Text('All statuses')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'active', child: Text('Active')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'disabled',
-                                        child: Text('Disabled')),
-                                    DropdownMenuItem<String?>(
-                                        value: 'deleted',
-                                        child: Text('Deleted')),
-                                  ],
-                                  onChanged: (value) =>
-                                      setState(() => _statusFilter = value),
-                                ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: _loadUsers,
-                                icon: const Icon(Icons.filter_alt_rounded,
-                                    size: 18),
-                                label: const Text('Apply'),
-                              ),
-                              OutlinedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _searchCtrl.clear();
-                                    _roleFilter = null;
-                                    _statusFilter = null;
-                                  });
-                                  _loadUsers();
-                                },
-                                child: const Text('Reset'),
-                              ),
-                            ],
+                                  SizedBox(
+                                    width: filterWidth,
+                                    child: DropdownButtonFormField<String?>(
+                                      initialValue: _roleFilter,
+                                      dropdownColor: AppTheme.surfaceHigh,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Role'),
+                                      items: const [
+                                        DropdownMenuItem<String?>(
+                                            value: null,
+                                            child: Text('All roles')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'student',
+                                            child: Text('Student')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'driver',
+                                            child: Text('Driver')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'admin',
+                                            child: Text('Admin')),
+                                      ],
+                                      onChanged: (value) =>
+                                          setState(() => _roleFilter = value),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: filterWidth,
+                                    child: DropdownButtonFormField<String?>(
+                                      initialValue: _statusFilter,
+                                      dropdownColor: AppTheme.surfaceHigh,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Status'),
+                                      items: const [
+                                        DropdownMenuItem<String?>(
+                                            value: null,
+                                            child: Text('All statuses')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'active',
+                                            child: Text('Active')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'disabled',
+                                            child: Text('Disabled')),
+                                        DropdownMenuItem<String?>(
+                                            value: 'deleted',
+                                            child: Text('Deleted')),
+                                      ],
+                                      onChanged: (value) =>
+                                          setState(() => _statusFilter = value),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: actionWidth,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _loadUsers,
+                                      icon: const Icon(
+                                        Icons.filter_alt_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text('Apply'),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: actionWidth,
+                                    child: OutlinedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _searchCtrl.clear();
+                                          _roleFilter = null;
+                                          _statusFilter = null;
+                                        });
+                                        _loadUsers();
+                                      },
+                                      child: const Text('Reset'),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -595,8 +619,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                   user['status']?.toString() ?? 'active';
                               final isPrimaryAdmin = user['id'] == 'admin-01';
                               return DataRow(
-                                color:
-                                    WidgetStateProperty.resolveWith<Color?>(
+                                color: WidgetStateProperty.resolveWith<Color?>(
                                   (_) => status == 'deleted'
                                       ? AppTheme.danger.withOpacity(0.05)
                                       : null,
