@@ -21,22 +21,53 @@ class AdminUsersScreen extends StatefulWidget {
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final _searchCtrl = TextEditingController();
+  final _tableScrollController = ScrollController();
   List<Map<String, dynamic>> _users = [];
   bool _isLoading = true;
   String? _error;
   String? _roleFilter;
   String? _statusFilter;
+  AppStateProvider? _appState;
+  String? _sessionSignature;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _appState = context.read<AppStateProvider>();
+      _sessionSignature = _buildSessionSignature(_appState!);
+      _appState!.addListener(_handleAppStateChanged);
+      _loadUsers();
+    });
   }
 
   @override
   void dispose() {
+    _appState?.removeListener(_handleAppStateChanged);
     _searchCtrl.dispose();
+    _tableScrollController.dispose();
     super.dispose();
+  }
+
+  String _buildSessionSignature(AppStateProvider appState) {
+    final token = appState.jwtToken ?? '';
+    return '${appState.currentRole.name}|$token';
+  }
+
+  void _handleAppStateChanged() {
+    final appState = _appState;
+    if (!mounted || appState == null) return;
+
+    final nextSignature = _buildSessionSignature(appState);
+    if (nextSignature == _sessionSignature) return;
+
+    _sessionSignature = nextSignature;
+    final hasAdminSession = (appState.jwtToken ?? '').isNotEmpty &&
+        appState.currentRole == UserRole.admin;
+    if (hasAdminSession) {
+      _loadUsers();
+    }
   }
 
   Map<String, String> _headers({bool includeJson = false}) {
@@ -71,6 +102,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final appState = context.read<AppStateProvider>();
     if ((appState.jwtToken ?? '').isEmpty ||
         appState.currentRole != UserRole.admin) {
+      debugPrint(
+        '[AdminUsers] blocked load: tokenPresent=${(appState.jwtToken ?? '').isNotEmpty} '
+        'role=${appState.currentRole.name}',
+      );
       setState(() {
         _isLoading = false;
         _error = 'Please sign in as an admin to manage users.';
@@ -78,10 +113,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       return;
     }
 
+    final uri = _buildUsersUri();
     try {
+      debugPrint('[AdminUsers] GET $uri');
       final response = await http
           .get(
-            _buildUsersUri(),
+            uri,
             headers: _headers(),
           )
           .timeout(const Duration(seconds: 12));
@@ -89,22 +126,40 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final decoded =
-            List<Map<String, dynamic>>.from(jsonDecode(response.body));
-        setState(() => _users = decoded);
+        final decoded = jsonDecode(response.body);
+        final users = List<Map<String, dynamic>>.from(
+          (decoded as List).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
+        );
+        debugPrint('[AdminUsers] parsed ${users.length} users');
+        setState(() => _users = users);
       } else {
-        final payload = Map<String, dynamic>.from(jsonDecode(response.body));
-        setState(() =>
-            _error = payload['detail']?.toString() ?? 'Unable to load users.');
+        final detail = _detailFromResponse(response, 'Unable to load users.');
+        debugPrint(
+          '[AdminUsers] request failed: status=${response.statusCode} detail=$detail',
+        );
+        setState(() => _error = detail);
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+      debugPrint('[AdminUsers] request threw: $error');
       setState(() => _error = 'Unable to connect to the user management API.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  String _detailFromResponse(http.Response response, String fallback) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded['detail']?.toString() ?? fallback;
+      }
+    } catch (_) {}
+    return fallback;
   }
 
   Future<void> _updateUser(String id, Map<String, dynamic> body) async {
@@ -119,6 +174,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
       if (response.statusCode == 200) {
         await _loadUsers();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('User updated successfully.',
@@ -158,6 +214,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
       if (response.statusCode == 200) {
         await _loadUsers();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -333,8 +390,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch provider to rebuild on theme toggle
-    context.watch<AppStateProvider>();
+    context
+        .select<AppStateProvider, ThemeMode>((provider) => provider.themeMode);
     final activeUsers =
         _users.where((user) => user['status'] == 'active').length;
     final disabledUsers =
@@ -386,8 +443,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GlassCard(
-                      fillColor: AppTheme.accent.withOpacity(0.07),
-                      borderColor: AppTheme.accent.withOpacity(0.22),
+                      fillColor: AppTheme.accent.withValues(alpha: 0.07),
+                      borderColor: AppTheme.accent.withValues(alpha: 0.22),
                       padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,6 +512,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                   SizedBox(
                                     width: filterWidth,
                                     child: DropdownButtonFormField<String?>(
+                                      key: ValueKey(
+                                          'role-${_roleFilter ?? 'all'}'),
                                       initialValue: _roleFilter,
                                       dropdownColor: AppTheme.surfaceHigh,
                                       decoration: const InputDecoration(
@@ -480,6 +539,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                   SizedBox(
                                     width: filterWidth,
                                     child: DropdownButtonFormField<String?>(
+                                      key: ValueKey(
+                                          'status-${_statusFilter ?? 'all'}'),
                                       initialValue: _statusFilter,
                                       dropdownColor: AppTheme.surfaceHigh,
                                       decoration: const InputDecoration(
@@ -537,15 +598,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     const SizedBox(height: 18),
                     if (_isLoading)
                       Padding(
-                        padding: EdgeInsets.only(top: 60),
+                        padding: const EdgeInsets.only(top: 60),
                         child: Center(
                             child: CircularProgressIndicator(
                                 color: AppTheme.accent)),
                       )
                     else if (_error != null)
                       GlassCard(
-                        fillColor: AppTheme.danger.withOpacity(0.12),
-                        borderColor: AppTheme.danger.withOpacity(0.28),
+                        fillColor: AppTheme.danger.withValues(alpha: 0.12),
+                        borderColor: AppTheme.danger.withValues(alpha: 0.28),
                         child: Text(_error!,
                             style:
                                 GoogleFonts.inter(color: AppTheme.textPrimary)),
@@ -596,134 +657,244 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         },
                       ),
                       const SizedBox(height: 18),
-                      GlassCard(
-                        padding: const EdgeInsets.all(12),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            headingTextStyle: GoogleFonts.inter(
-                                color: AppTheme.textSecondary,
-                                fontWeight: FontWeight.w700),
-                            dataTextStyle:
-                                GoogleFonts.inter(color: AppTheme.textPrimary),
-                            columns: const [
-                              DataColumn(label: Text('Name')),
-                              DataColumn(label: Text('Email')),
-                              DataColumn(label: Text('Role')),
-                              DataColumn(label: Text('Status')),
-                              DataColumn(label: Text('Created')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: _users.map((user) {
-                              final status =
-                                  user['status']?.toString() ?? 'active';
-                              final isPrimaryAdmin = user['id'] == 'admin-01';
-                              return DataRow(
-                                color: WidgetStateProperty.resolveWith<Color?>(
-                                  (_) => status == 'deleted'
-                                      ? AppTheme.danger.withOpacity(0.05)
-                                      : null,
+                      if (_users.isEmpty)
+                        GlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'No users match the current filters.',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                                cells: [
-                                  DataCell(
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(user['name']?.toString() ?? ''),
-                                        if (isPrimaryAdmin)
-                                          Text(
-                                            'Primary admin',
-                                            style: GoogleFonts.inter(
-                                                color: AppTheme.warning,
-                                                fontSize: 11),
-                                          ),
-                                      ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Try clearing the search or resetting role and status filters.',
+                                style: GoogleFonts.inter(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _searchCtrl.clear();
+                                    _roleFilter = null;
+                                    _statusFilter = null;
+                                  });
+                                  _loadUsers();
+                                },
+                                child: const Text('Reset Filters'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        GlassCard(
+                          padding: const EdgeInsets.all(12),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Scrollbar(
+                                controller: _tableScrollController,
+                                thumbVisibility: constraints.maxWidth < 1180,
+                                child: SingleChildScrollView(
+                                  controller: _tableScrollController,
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const ClampingScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth: constraints.maxWidth,
                                     ),
-                                  ),
-                                  DataCell(
-                                      Text(user['email']?.toString() ?? '')),
-                                  DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppTheme.accent.withOpacity(0.14),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Text(
-                                        (user['role']?.toString() ?? '')
-                                            .toUpperCase(),
-                                        style: GoogleFonts.inter(
-                                            color: AppTheme.textPrimary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      status,
-                                      style: GoogleFonts.inter(
-                                        color: status == 'active'
-                                            ? AppTheme.positive
-                                            : status == 'disabled'
-                                                ? AppTheme.warning
-                                                : AppTheme.danger,
+                                    child: DataTable(
+                                      horizontalMargin: 12,
+                                      columnSpacing: 24,
+                                      dataRowMinHeight: 64,
+                                      dataRowMaxHeight: 74,
+                                      headingTextStyle: GoogleFonts.inter(
+                                        color: AppTheme.textSecondary,
                                         fontWeight: FontWeight.w700,
                                       ),
-                                    ),
-                                  ),
-                                  DataCell(Text(_formatDate(
-                                      user['created_at']?.toString()))),
-                                  DataCell(
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          tooltip: 'Edit user',
-                                          onPressed: isPrimaryAdmin
-                                              ? null
-                                              : () => _showEditDialog(user),
-                                          icon: const Icon(Icons.edit_rounded,
-                                              size: 18),
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                        PopupMenuButton<String>(
-                                          tooltip: 'Status actions',
-                                          color: AppTheme.surfaceHigh,
-                                          onSelected: isPrimaryAdmin
-                                              ? null
-                                              : (value) => _changeUserStatus(
-                                                  user['id'].toString(), value),
-                                          itemBuilder: (context) => const [
-                                            PopupMenuItem(
-                                                value: 'disabled',
-                                                child: Text('Disable User')),
-                                            PopupMenuItem(
-                                                value: 'deleted',
-                                                child:
-                                                    Text('Soft Delete User')),
-                                          ],
-                                          icon: Icon(
-                                            Icons.more_vert_rounded,
-                                            size: 18,
-                                            color: isPrimaryAdmin
-                                                ? AppTheme.textMuted
-                                                : AppTheme.textSecondary,
-                                          ),
-                                        ),
+                                      dataTextStyle: GoogleFonts.inter(
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                      columns: const [
+                                        DataColumn(label: Text('Name')),
+                                        DataColumn(label: Text('Email')),
+                                        DataColumn(label: Text('Role')),
+                                        DataColumn(label: Text('Status')),
+                                        DataColumn(label: Text('Created')),
+                                        DataColumn(label: Text('Actions')),
                                       ],
+                                      rows: _users.map((user) {
+                                        final status =
+                                            user['status']?.toString() ??
+                                                'active';
+                                        final isPrimaryAdmin =
+                                            user['id'] == 'admin-01';
+                                        return DataRow(
+                                          color: WidgetStateProperty
+                                              .resolveWith<Color?>(
+                                            (_) => status == 'deleted'
+                                                ? AppTheme.danger
+                                                    .withValues(alpha: 0.05)
+                                                : null,
+                                          ),
+                                          cells: [
+                                            DataCell(
+                                              Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    user['name']?.toString() ??
+                                                        '',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  if (isPrimaryAdmin)
+                                                    Text(
+                                                      'Primary admin',
+                                                      style: GoogleFonts.inter(
+                                                        color: AppTheme.warning,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            DataCell(
+                                              ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  maxWidth: 240,
+                                                ),
+                                                child: Text(
+                                                  user['email']?.toString() ??
+                                                      '',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.accent
+                                                      .withValues(alpha: 0.14),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  (user['role']?.toString() ??
+                                                          '')
+                                                      .toUpperCase(),
+                                                  style: GoogleFonts.inter(
+                                                    color: AppTheme.textPrimary,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
+                                                status,
+                                                style: GoogleFonts.inter(
+                                                  color: status == 'active'
+                                                      ? AppTheme.positive
+                                                      : status == 'disabled'
+                                                          ? AppTheme.warning
+                                                          : AppTheme.danger,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(
+                                                _formatDate(
+                                                  user['created_at']
+                                                      ?.toString(),
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    tooltip: 'Edit user',
+                                                    onPressed: isPrimaryAdmin
+                                                        ? null
+                                                        : () => _showEditDialog(
+                                                            user),
+                                                    icon: const Icon(
+                                                      Icons.edit_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    color:
+                                                        AppTheme.textSecondary,
+                                                  ),
+                                                  PopupMenuButton<String>(
+                                                    tooltip: 'Status actions',
+                                                    color: AppTheme.surfaceHigh,
+                                                    onSelected: isPrimaryAdmin
+                                                        ? null
+                                                        : (value) =>
+                                                            _changeUserStatus(
+                                                              user['id']
+                                                                  .toString(),
+                                                              value,
+                                                            ),
+                                                    itemBuilder: (context) =>
+                                                        const [
+                                                      PopupMenuItem(
+                                                        value: 'disabled',
+                                                        child: Text(
+                                                          'Disable User',
+                                                        ),
+                                                      ),
+                                                      PopupMenuItem(
+                                                        value: 'deleted',
+                                                        child: Text(
+                                                          'Soft Delete User',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    icon: Icon(
+                                                      Icons.more_vert_rounded,
+                                                      size: 18,
+                                                      color: isPrimaryAdmin
+                                                          ? AppTheme.textMuted
+                                                          : AppTheme
+                                                              .textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList(),
                                     ),
                                   ),
-                                ],
+                                ),
                               );
-                            }).toList(),
+                            },
                           ),
                         ),
-                      ),
                     ],
                   ],
                 ),
