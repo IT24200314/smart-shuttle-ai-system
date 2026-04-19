@@ -22,28 +22,28 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAZOw-F2Anmqr49D6p29IxMHGgSOcHjyQQ',
-    appId: '1:809923084542:web:5c2fb7d2e77ec3e9dda5af',
-    messagingSenderId: '809923084542',
-    projectId: 'smart-shuttle-198a1',
-    authDomain: 'smart-shuttle-198a1.firebaseapp.com',
-    storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
+    apiKey: 'AIzaSyDZVvGX4XPlhgW5NUVKjs9IO2aPXE0WvGM',
+    appId: '1:317725246812:web:d50b5dda6ba6ce99826d99',
+    messagingSenderId: '317725246812',
+    projectId: 'smart-shuttle-ai-b58f8',
+    authDomain: 'smart-shuttle-ai-b58f8.firebaseapp.com',
+    storageBucket: 'smart-shuttle-ai-b58f8.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCp0ZSSDB57TjWsZeuz8shC2hfsIGS8VHc',
-    appId: '1:809923084542:android:5d3e54df9e42b882dda5af',
-    messagingSenderId: '809923084542',
-    projectId: 'smart-shuttle-198a1',
-    storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
+    apiKey: 'AIzaSyD58SrGEgMIZoBNGb8YpzaSHlBUnnbDbiA',
+    appId: '1:317725246812:android:21cb11899fd48454826d99',
+    messagingSenderId: '317725246812',
+    projectId: 'smart-shuttle-ai-b58f8',
+    storageBucket: 'smart-shuttle-ai-b58f8.firebasestorage.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAZOw-F2Anmqr49D6p29IxMHGgSOcHjyQQ',
-    appId: '1:809923084542:web:5c2fb7d2e77ec3e9dda5af',
-    messagingSenderId: '809923084542',
-    projectId: 'smart-shuttle-198a1',
-    authDomain: 'smart-shuttle-198a1.firebaseapp.com',
-    storageBucket: 'smart-shuttle-198a1.firebasestorage.app',
+    apiKey: 'AIzaSyDZVvGX4XPlhgW5NUVKjs9IO2aPXE0WvGM',
+    appId: '1:317725246812:web:d50b5dda6ba6ce99826d99',
+    messagingSenderId: '317725246812',
+    projectId: 'smart-shuttle-ai-b58f8',
+    authDomain: 'smart-shuttle-ai-b58f8.firebaseapp.com',
+    storageBucket: 'smart-shuttle-ai-b58f8.firebasestorage.app',
   );
 }

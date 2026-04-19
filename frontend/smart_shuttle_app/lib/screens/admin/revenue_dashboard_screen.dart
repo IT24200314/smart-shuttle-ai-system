@@ -312,18 +312,14 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
     double morningProfit = 0;
     double eveningProfit = 0;
     int belowBreakEven = 0;
-    int morningCount = 0;
-    int eveningCount = 0;
 
     for (final trip in trips) {
       final tripType = trip['trip_type']?.toString().toLowerCase() ?? '';
       final profit = _asDouble(trip['profit_or_loss']);
       if (profit < 0) belowBreakEven++;
       if (tripType.contains('morning')) {
-        morningCount++;
         morningProfit += profit;
       } else if (tripType.contains('evening')) {
-        eveningCount++;
         eveningProfit += profit;
       }
     }
@@ -349,7 +345,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.only(top: 4, right: 6),
+            padding: const EdgeInsets.only(top: 4, right: 6),
             child: Icon(Icons.circle, color: AppTheme.textMuted, size: 6),
           ),
           Expanded(
@@ -1399,7 +1395,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: EdgeInsets.only(top: 4, right: 6),
+                            padding: const EdgeInsets.only(top: 4, right: 6),
                             child: Icon(Icons.circle,
                                 color: AppTheme.textMuted, size: 6),
                           ),

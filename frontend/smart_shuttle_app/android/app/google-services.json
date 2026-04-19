@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "809923084542",
-    "project_id": "smart-shuttle-198a1",
-    "storage_bucket": "smart-shuttle-198a1.firebasestorage.app"
+    "project_number": "317725246812",
+    "project_id": "smart-shuttle-ai-b58f8",
+    "storage_bucket": "smart-shuttle-ai-b58f8.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:809923084542:android:5d3e54df9e42b882dda5af",
+        "mobilesdk_app_id": "1:317725246812:android:21cb11899fd48454826d99",
         "android_client_info": {
           "package_name": "com.example.smart_shuttle"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCp0ZSSDB57TjWsZeuz8shC2hfsIGS8VHc"
+          "current_key": "AIzaSyD58SrGEgMIZoBNGb8YpzaSHlBUnnbDbiA"
         }
       ],
       "services": {

@@ -18,6 +18,16 @@ from firebase_admin import credentials, firestore
 from ultralytics import YOLO
 
 
+BACKEND_ROOT = (Path(__file__).resolve().parents[2] / "backend").resolve()
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.firebase_project_config import (  # noqa: E402
+    assert_firebase_consistency,
+    load_service_account_payload,
+)
+
+
 WINDOW_NAME = "Smart Shuttle AI Preview"
 UPDATE_INTERVAL_SECONDS = 0.75
 FIRESTORE_TIMEOUT_SECONDS = 3.0
@@ -113,15 +123,15 @@ class SimpleCentroidTracker:
 
 def initialize_firebase():
     try:
+        report = assert_firebase_consistency()
+        key_path, cert_dict = load_service_account_payload()
         if not firebase_admin._apps:
-            base_dir = Path(__file__).resolve().parent
-            key_path = (
-                base_dir / ".." / ".." / "backend" / "database" / "serviceAccountKey.json"
-            ).resolve()
-            if not key_path.exists():
-                raise FileNotFoundError(f"Firebase key not found at {key_path}")
-
-            cred = credentials.Certificate(str(key_path))
+            print(
+                "[FLOW] Passenger counting Firebase project verified: "
+                f"{report['expected_project_id']}"
+            )
+            print(f"[FLOW] Using Firebase service account file: {key_path}")
+            cred = credentials.Certificate(cert_dict)
             firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as exc:

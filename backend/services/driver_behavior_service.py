@@ -231,6 +231,50 @@ def get_driver_behavior_state(driver_email: str) -> dict[str, Any]:
     return _read_state_file(_session_paths(driver_email)["state_path"])
 
 
+class DriverBehaviorSessionManager:
+    """Owns the laptop-camera driver behavior runtime lifecycle."""
+
+    def __init__(
+        self,
+        *,
+        preview_enabled: bool = DRIVER_BEHAVIOR_PREVIEW_ENABLED,
+    ) -> None:
+        self.preview_enabled = preview_enabled
+
+    def get_runtime_config(self) -> dict[str, str]:
+        return get_driver_behavior_runtime_config()
+
+    def get_state(self, driver_email: str) -> dict[str, Any]:
+        return get_driver_behavior_state(driver_email)
+
+    def launch(
+        self,
+        *,
+        driver_email: str,
+        driver_id: str | None = None,
+        driver_name: str | None = None,
+        preview_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        return launch_driver_behavior_monitor(
+            driver_email=driver_email,
+            driver_id=driver_id,
+            driver_name=driver_name,
+            preview_enabled=(
+                self.preview_enabled if preview_enabled is None else preview_enabled
+            ),
+        )
+
+    def stop(
+        self,
+        driver_email: str,
+        timeout_seconds: float = DEFAULT_STOP_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        return stop_driver_behavior_monitor(
+            driver_email,
+            timeout_seconds=timeout_seconds,
+        )
+
+
 def launch_driver_behavior_monitor(
     *,
     driver_email: str,
@@ -452,3 +496,6 @@ def stop_driver_behavior_monitor(
         "monitor_state": final_state,
         "camera_active": False,
     }
+
+
+driver_behavior_session_manager = DriverBehaviorSessionManager()

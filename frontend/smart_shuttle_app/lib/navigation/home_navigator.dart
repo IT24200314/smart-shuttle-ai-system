@@ -51,10 +51,10 @@ class HomeNavigator extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (isCompact) ...[
-                            Row(
+                            const Row(
                               children: [
                                 _GatewayBadge(),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 Expanded(
                                   child: _GatewayTitleBlock(compact: true),
                                 ),
@@ -66,14 +66,14 @@ class HomeNavigator extends StatelessWidget {
                               child: ThemeToggleButton(compact: true),
                             ),
                           ] else
-                            Row(
+                            const Row(
                               children: [
                                 _GatewayBadge(),
-                                const SizedBox(width: 12),
-                                const Expanded(
+                                SizedBox(width: 12),
+                                Expanded(
                                   child: _GatewayTitleBlock(compact: false),
                                 ),
-                                const ThemeToggleButton(),
+                                ThemeToggleButton(),
                               ],
                             ),
                           const SizedBox(height: 28),

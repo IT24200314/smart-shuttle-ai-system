@@ -1,19 +1,24 @@
-import json
-import os
+import sys
+from pathlib import Path
 
-key_path = r'c:\suttle project\smart-shuttle-ai-system\backend\database\serviceAccountKey.json'
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = PROJECT_ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.firebase_project_config import (  # noqa: E402
+    describe_service_account_source,
+    load_service_account_payload,
+)
+
 
 try:
-    with open(key_path, 'r') as f:
-        data = json.load(f)
-        print(f"Project ID: {data.get('project_id')}")
-        print(f"Client Email: {data.get('client_email')}")
-        pk = data.get('private_key', '')
-        print(f"Private Key starts with: {pk[:50]}...")
-        print(f"Private Key ends with: ...{pk[-50:]}")
-        if '\n' in pk:
-            print("Found literal newlines in private key string.")
-        if '\\n' in pk:
-            print("Found escaped \\n in private key string.")
+    key_path, payload = load_service_account_payload()
+    print(f"Resolved key path: {key_path}")
+    print(f"Resolved key source: {describe_service_account_source(key_path)}")
+    print(f"Project ID: {payload.get('project_id')}")
+    print(f"Client Email: {payload.get('client_email')}")
+    print(f"Private Key ID: {payload.get('private_key_id')}")
 except Exception as e:
     print(f"Error: {e}")

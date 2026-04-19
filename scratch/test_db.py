@@ -1,31 +1,38 @@
+import sys
+from pathlib import Path
 
-import json
 import firebase_admin
 from firebase_admin import credentials, firestore
-import os
 
-key_path = r'c:\suttle project\smart-shuttle-ai-system\backend\database\serviceAccountKey.json'
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = PROJECT_ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.firebase_project_config import (  # noqa: E402
+    assert_firebase_consistency,
+    load_service_account_payload,
+)
+
 
 try:
-    with open(key_path, 'r') as f:
-        data = json.load(f)
-        print(f"Project ID: {data.get('project_id')}")
-        pk = data.get('private_key', '')
-        print(f"Private Key Length: {len(pk)}")
-        print(f"Private Key Repr (first 100): {repr(pk[:100])}")
-        print(f"Private Key Ends with: {pk[-30:]}")
-        
-    cred = credentials.Certificate(key_path)
-    # Don't initialize if already done
+    report = assert_firebase_consistency()
+    key_path, cert_dict = load_service_account_payload()
+    print(f"Using Firebase project: {report['expected_project_id']}")
+    print(f"Using service account: {key_path}")
+
+    cred = credentials.Certificate(cert_dict)
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
-    
+
     db = firestore.client()
     print("Attempting to read 'users' collection...")
-    doc = db.collection('users').limit(1).get(timeout=5)
+    db.collection("users").limit(1).get(timeout=5)
     print("Success! Connection verified.")
 
 except Exception as e:
     print(f"ERROR: {type(e).__name__}: {e}")
     import traceback
+
     traceback.print_exc()

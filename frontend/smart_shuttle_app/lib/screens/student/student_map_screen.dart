@@ -163,14 +163,6 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     super.dispose();
   }
 
-  Offset _busPosition(double t) {
-    final totalSegments = _waypoints.length - 1;
-    final progress = t * totalSegments;
-    final seg = progress.floor().clamp(0, totalSegments - 1);
-    final frac = progress - seg;
-    return Offset.lerp(_waypoints[seg], _waypoints[seg + 1], frac)!;
-  }
-
   void _openFeedback() {
     if (_feedbackTripId == null || _feedbackTripId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -720,33 +712,40 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: AppTheme.chipRadius,
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppTheme.positive, size: 14),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: GoogleFonts.inter(
-                color: AppTheme.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-                color: AppTheme.textPrimary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700),
-          ),
-        ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceHigh,
+          borderRadius: AppTheme.chipRadius,
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppTheme.positive, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              '$label: ',
+              style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600),
+            ),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

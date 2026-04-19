@@ -45,5 +45,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/config/firebase_project_manifest.json
     - assets/images/
     - assets/audio/Alarm.mp3

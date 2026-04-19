@@ -2,12 +2,24 @@ import argparse
 import hashlib
 import os
 import random
+import sys
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 import bcrypt
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.firebase_project_config import (  # noqa: E402
+    assert_firebase_consistency,
+    load_service_account_payload,
+)
 
 
 SEED_TAG = "smart_shuttle_demo_v4"
@@ -44,12 +56,13 @@ LEGACY_COLLECTIONS = [
     "route_snapshots",
 ]
 
-
-key_path = os.path.join(os.path.dirname(__file__), "../database/serviceAccountKey.json")
-cred = credentials.Certificate(key_path)
+report = assert_firebase_consistency()
+key_path, cert_dict = load_service_account_payload()
+cred = credentials.Certificate(cert_dict)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 db = firestore.client()
+print(f"Using Firebase project {report['expected_project_id']} for database seeding.")
 
 
 def _now_iso() -> str:

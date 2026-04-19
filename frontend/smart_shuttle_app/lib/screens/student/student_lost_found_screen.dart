@@ -53,6 +53,7 @@ class _StudentLostFoundScreenState extends State<StudentLostFoundScreen> {
         body: json.encode({'item_id': itemId, 'student_id': studentId}),
       );
 
+      if (!mounted) return;
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text('Claim request sent to admin'),
@@ -166,16 +167,22 @@ class _StudentLostFoundScreenState extends State<StudentLostFoundScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(item['name'] ?? 'Item',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.inter(
                                           color: AppTheme.textPrimary,
                                           fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 2),
                                   Text(item['description'] ?? 'Found on bus',
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.inter(
                                           color: AppTheme.textSecondary,
                                           fontSize: 12)),
                                   const SizedBox(height: 4),
                                   Text('Date: ${item['foundedAt'] ?? 'Today'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.inter(
                                           color: AppTheme.textMuted,
                                           fontSize: 10)),

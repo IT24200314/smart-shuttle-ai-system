@@ -1,7 +1,12 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from routes import dashboard_routes, driver_routes, auth_routes, lost_found_routes, map_routes, admin_routes, user_routes, feedback_routes
-from utils.firebase_config import db, check_firestore_connection
+from utils.firebase_config import db, check_firestore_connection, require_firebase_runtime_ready
+
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Smart Shuttle Operations API")
 
@@ -16,9 +21,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    # Verify database connection on startup
+    report = require_firebase_runtime_ready()
+    logger.info(
+        "Backend startup locked to Firebase project %s.",
+        report["expected_project_id"],
+    )
     if not check_firestore_connection(db):
-        print("WARNING: Firestore connectivity check failed on startup. Some features may be unavailable.")
+        raise RuntimeError(
+            "Firestore connectivity check failed after Firebase consistency validation."
+        )
 
 app.include_router(dashboard_routes.router)
 app.include_router(driver_routes.router)

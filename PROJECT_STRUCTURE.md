@@ -21,4 +21,4 @@ Python operates as the central authority. All math, AI metric aggregations, Brea
 - **`models/schemas.py`**: Pydantic typed enforcement.
 
 ### 3. The Data Tier (Cloud Firestore over Firebase Admin SDK)
-The backend exclusively manipulates the database using the internal `serviceAccountKey.json` bypass. The databases (`trip_financials`, `users`, `lost_found_items`) are inaccessible to the public domain unless queried through a valid Python endpoint.
+The backend exclusively manipulates the database using a locally supplied Firebase Admin credential (`serviceAccountKey.local.json` or `SMART_SHUTTLE_FIREBASE_SERVICE_ACCOUNT`) that must match the canonical Firebase manifest. The databases (`trip_financials`, `users`, `lost_found_items`) are inaccessible to the public domain unless queried through a valid Python endpoint.

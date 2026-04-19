@@ -157,6 +157,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
 
       if (response.statusCode == 200) {
         await _loadExistingFeedback();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

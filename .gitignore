@@ -19,12 +19,24 @@ __pycache__/
 
 # Environment
 venv/
+.venv/
+.venv*/
 .env
+*.env
+.env.*
+*.local.env
+*.secrets.env
+backend/database/serviceAccountKey*.json
+backend/database/serviceAccountKey.local.json
+*serviceAccountKey*.json
+*firebase-adminsdk*.json
+!backend/database/serviceAccountKey.example.json
 
-# Firebase/Service Account Keys (NEVER commit secrets)
-serviceAccountKey.json
-google-services.json
-firebase-config.json
+# Firebase config backups (keep only the canonical tracked files)
+frontend/smart_shuttle_app/android/**/google-services*.json
+!frontend/smart_shuttle_app/android/app/google-services.json
+frontend/smart_shuttle_app/ios/**/GoogleService-Info*.plist
+!frontend/smart_shuttle_app/ios/Runner/GoogleService-Info.plist
 
 # Local AI training artifacts
 /ai_models/passenger_counting/datasets/

@@ -16,6 +16,7 @@ class AuditLogScreen extends StatefulWidget {
 }
 
 class _AuditLogScreenState extends State<AuditLogScreen> {
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _auditLogsStream() {
@@ -68,16 +69,24 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     if (lower.contains('login') || lower.contains('auth')) {
       return AppTheme.accent;
     }
-    if (lower.contains('create') || lower.contains('add') || lower.contains('register')) {
+    if (lower.contains('create') ||
+        lower.contains('add') ||
+        lower.contains('register')) {
       return AppTheme.positive;
     }
-    if (lower.contains('delete') || lower.contains('remove') || lower.contains('disable')) {
+    if (lower.contains('delete') ||
+        lower.contains('remove') ||
+        lower.contains('disable')) {
       return AppTheme.danger;
     }
-    if (lower.contains('update') || lower.contains('edit') || lower.contains('modify')) {
+    if (lower.contains('update') ||
+        lower.contains('edit') ||
+        lower.contains('modify')) {
       return AppTheme.warning;
     }
-    if (lower.contains('view') || lower.contains('read') || lower.contains('access')) {
+    if (lower.contains('view') ||
+        lower.contains('read') ||
+        lower.contains('access')) {
       return AppTheme.info;
     }
     return AppTheme.textSecondary;
@@ -101,7 +110,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
       data['device'],
       data['source'],
     ];
-    return fields.any((f) => f != null && f.toString().toLowerCase().contains(lower));
+    return fields
+        .any((f) => f != null && f.toString().toLowerCase().contains(lower));
   }
 
   DataRow _buildLiveRow(Map<String, dynamic> data) {
@@ -128,6 +138,12 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
 
     return _buildLogEntry(
         time, user, role, module, actionType, activity, device);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -206,6 +222,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
+                          controller: _searchController,
                           onChanged: (v) => setState(() => _searchQuery = v),
                           style: GoogleFonts.inter(
                             color: AppTheme.textPrimary,
@@ -228,7 +245,10 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                       ),
                       if (_searchQuery.isNotEmpty)
                         GestureDetector(
-                          onTap: () => setState(() => _searchQuery = ''),
+                          onTap: () => setState(() {
+                            _searchController.clear();
+                            _searchQuery = '';
+                          }),
                           child: Icon(Icons.close_rounded,
                               color: AppTheme.textMuted, size: 16),
                         ),
@@ -377,9 +397,18 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                   fontSize: 11,
                   fontFeatures: const [FontFeature.tabularFigures()])),
         )),
-        DataCell(Text(user,
-            style:
-                GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 12))),
+        DataCell(
+          SizedBox(
+            width: 150,
+            child: Text(
+              user,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 12),
+            ),
+          ),
+        ),
         DataCell(Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           decoration: BoxDecoration(
@@ -412,15 +441,31 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
           ),
           child: Text(actionType,
               style: GoogleFonts.inter(
-                  color: typeColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700)),
+                  color: typeColor, fontSize: 10, fontWeight: FontWeight.w700)),
         )),
-        DataCell(Text(activity,
-            style:
-                GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 12))),
-        DataCell(Text(device,
-            style: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 11))),
+        DataCell(
+          SizedBox(
+            width: 320,
+            child: Text(
+              activity,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  GoogleFonts.inter(color: AppTheme.textPrimary, fontSize: 12),
+            ),
+          ),
+        ),
+        DataCell(
+          SizedBox(
+            width: 170,
+            child: Text(
+              device,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(color: AppTheme.textMuted, fontSize: 11),
+            ),
+          ),
+        ),
       ],
     );
   }

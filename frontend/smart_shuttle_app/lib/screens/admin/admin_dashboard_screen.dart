@@ -305,7 +305,6 @@ class _KpiStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth >= 760 ? 2 : 1;
         final cards = [
           KpiCard(
             icon: Icons.manage_accounts_rounded,
@@ -325,17 +324,26 @@ class _KpiStrip extends StatelessWidget {
           ),
         ];
 
-        return GridView.builder(
-          itemCount: cards.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            mainAxisExtent: constraints.maxWidth >= 1100 ? 180 : 174,
-          ),
-          itemBuilder: (context, index) => cards[index],
+        if (constraints.maxWidth < 760) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                cards[i],
+                if (i != cards.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              Expanded(child: cards[i]),
+              if (i != cards.length - 1) const SizedBox(width: 12),
+            ],
+          ],
         );
       },
     );
@@ -403,26 +411,22 @@ class _ModuleGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final crossAxisCount = width >= 1180
-            ? 3
-            : width >= 720
-                ? 2
-                : 1;
+        final cardWidth = width >= 1220
+            ? (width - 24) / 3
+            : width >= 760
+                ? (width - 12) / 2
+                : width;
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            mainAxisExtent: width >= 980 ? 144 : 150,
-          ),
-          itemCount: modules.length,
-          itemBuilder: (context, index) {
-            final module = modules[index];
-            return _ModuleCard(module: module);
-          },
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final module in modules)
+              SizedBox(
+                width: cardWidth,
+                child: _ModuleCard(module: module),
+              ),
+          ],
         );
       },
     );
@@ -455,54 +459,57 @@ class _ModuleCard extends StatelessWidget {
     return GlassCard(
       onTap: module.onTap,
       padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: module.accent.withValues(alpha: 0.14),
-              borderRadius: AppTheme.chipRadius,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 116),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: module.accent.withValues(alpha: 0.14),
+                borderRadius: AppTheme.chipRadius,
+              ),
+              child: Icon(module.icon, color: module.accent, size: 20),
             ),
-            child: Icon(module.icon, color: module.accent, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  module.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    module.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  module.subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textSecondary,
-                    fontSize: 11,
-                    height: 1.5,
+                  const SizedBox(height: 4),
+                  Text(
+                    module.subtitle,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                      height: 1.5,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Icon(
-            Icons.arrow_forward_rounded,
-            color: AppTheme.textMuted,
-            size: 16,
-          ),
-        ],
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_forward_rounded,
+              color: AppTheme.textMuted,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }

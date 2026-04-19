@@ -515,64 +515,82 @@ class _ItemDetails extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item['name']?.toString() ?? 'Item',
-                      style: GoogleFonts.inter(
-                        color: AppTheme.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withOpacity(0.12),
-                      borderRadius: AppTheme.chipRadius,
-                    ),
-                    child: Text(
-                      status.toUpperCase(),
-                      style: GoogleFonts.inter(
-                        color: badgeColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item['description']?.toString() ?? 'No description provided.',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final stackHeader = constraints.maxWidth < 420;
+              final title = Text(
+                item['name']?.toString() ?? 'Item',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                  height: 1.5,
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  _MetaItem(
-                    icon: Icons.person_outline_rounded,
-                    text: 'Claimed by: ${item['claimedBy'] ?? 'Unknown'}',
+              );
+              final statusBadge = Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.12),
+                  borderRadius: AppTheme.chipRadius,
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    color: badgeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
-                  _MetaItem(
-                    icon: Icons.badge_outlined,
-                    text: 'Item ID: ${item['id'] ?? '--'}',
+                ),
+              );
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (stackHeader) ...[
+                    title,
+                    const SizedBox(height: 8),
+                    statusBadge,
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: title),
+                        const SizedBox(width: 10),
+                        statusBadge,
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    item['description']?.toString() ??
+                        'No description provided.',
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      _MetaItem(
+                        icon: Icons.person_outline_rounded,
+                        text: 'Claimed by: ${item['claimedBy'] ?? 'Unknown'}',
+                      ),
+                      _MetaItem(
+                        icon: Icons.badge_outlined,
+                        text: 'Item ID: ${item['id'] ?? '--'}',
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
       ],

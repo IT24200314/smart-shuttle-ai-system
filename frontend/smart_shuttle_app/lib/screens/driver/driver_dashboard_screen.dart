@@ -183,14 +183,16 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
 
         if (res.statusCode == 200) {
           final data = json.decode(res.body);
+          final passengerSession =
+              data['passenger_counting_session'] as Map<String, dynamic>? ??
+                  data['ai_session'] as Map<String, dynamic>?;
           final behaviorSession =
               data['driver_behavior_session'] as Map<String, dynamic>?;
           if (!mounted) return;
           setState(() {
             _activeTripType = tripType;
             _activeTripId = data['trip_id']?.toString();
-            _aiState =
-                data['ai_session']?['ai_state']?.toString() ?? 'starting';
+            _aiState = passengerSession?['ai_state']?.toString() ?? 'starting';
             _estimatedPassengerCount = 0;
             _estimatedPassengerCountLive = 0;
             _finalEstimatedPassengerCount = 0;
@@ -207,7 +209,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
           });
           provider.beginDriverSession();
           _showSuccess(
-            'Passenger preview and driver behavior monitoring are now active.',
+            'Passenger counting preview and driver behavior monitoring are now active.',
           );
           _fetchLiveTelemetry();
           _fetchSafetyScore();
@@ -329,8 +331,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         backgroundColor: AppTheme.surfaceHigh,
         title: Text('Start New Trip',
             style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-        content: SizedBox(
-          width: 360,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -364,8 +366,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
         backgroundColor: AppTheme.surfaceHigh,
         title: Text('Finalize Tickets',
             style: GoogleFonts.inter(color: AppTheme.textPrimary)),
-        content: SizedBox(
-          width: 360,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1129,7 +1131,7 @@ class _SessionButton extends StatelessWidget {
             ? 'Tap to begin passenger preview and driver monitoring'
             : waitingForFinalize
                 ? 'AI stopped - tap again to finalize tickets'
-                : 'Tap to end session and stop both AI systems';
+                : 'Tap to end the session and stop passenger counting plus driver monitoring';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -1255,7 +1257,7 @@ class _ResponsiveTileRow extends StatelessWidget {
             children: [
               for (var i = 0; i < children.length; i++) ...[
                 children[i],
-                if (i != children.length - 1) SizedBox(height: spacing),
+                if (i != children.length - 1) const SizedBox(height: spacing),
               ],
             ],
           );
@@ -1265,7 +1267,7 @@ class _ResponsiveTileRow extends StatelessWidget {
           children: [
             for (var i = 0; i < children.length; i++) ...[
               Expanded(child: children[i]),
-              if (i != children.length - 1) SizedBox(width: spacing),
+              if (i != children.length - 1) const SizedBox(width: spacing),
             ],
           ],
         );

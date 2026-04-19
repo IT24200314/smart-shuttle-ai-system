@@ -354,10 +354,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               SizedBox(height: compact ? 18 : 24),
-              Wrap(
+              const Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: const [
+                children: [
                   _RoleHint(label: 'Students', icon: Icons.school_rounded),
                   _RoleHint(label: 'Drivers', icon: Icons.badge_rounded),
                   _RoleHint(
@@ -375,9 +375,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: AppTheme.cardRadius,
                     border: Border.all(color: AppTheme.border),
                   ),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       _FeatureLine(
                         icon: Icons.route_rounded,
                         title: 'Live transport visibility',
@@ -402,10 +402,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Wrap(
+                const Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: const [
+                  children: [
                     _BrandCapability(
                       title: 'Live operations',
                       subtitle: 'Responsive desktop and mobile access',
@@ -425,10 +425,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ] else ...[
                 const SizedBox(height: 16),
-                Wrap(
+                const Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: const [
+                  children: [
                     _BrandMiniMetric(
                       label: 'Live ops',
                       value: 'Students + drivers',
@@ -680,7 +680,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildDemoAccessSection() {
-    final demos = const [
+    const demos = [
       _DemoAccount(
         label: 'Admin Demo',
         email: 'admin@shuttle.lk',
