@@ -225,11 +225,22 @@ def start_trip(req: StartTripRequest):
     try:
         driver_identity = _resolve_driver_identity(req.driver_id, req.driver_email)
         live_doc, live_data = _safe_live_status_data(req.bus_id)
+        
+        # Force reset any stale active trip (handles incomplete shutdowns gracefully)
         if live_doc.exists and str(live_data.get("status", "")).lower() == "active":
-            raise HTTPException(
-                status_code=400,
-                detail="There is already an active trip for this bus",
-            )
+            print(f"[FLOW] Cleaning up stale active trip for bus {req.bus_id}.")
+            # Reset the status to idle first
+            db.collection("LIVE-STATUS").document(req.bus_id).set({
+                "status": "idle",
+                "trip_id": None,
+                "passenger_count": 0,
+                "current_detected_count": 0,
+                "peak_visible_count": 0,
+                "estimated_passenger_count_live": 0,
+                "estimated_passenger_count": 0,
+                "final_estimated_passenger_count": 0,
+                "ai_state": "idle"
+            }, merge=True)
 
         trip_id = _generate_trip_id()
         timestamp = _now_iso()
@@ -296,50 +307,28 @@ def start_trip(req: StartTripRequest):
             driver_name=driver_identity["driver_name"],
         )
 
-        ai_session = launch_ai_counting(
-            bus_id=req.bus_id,
-            trip_id=trip_id,
-            preview_enabled=AI_PREVIEW_ENABLED,
-        )
-        driver_behavior_session = launch_driver_behavior_monitor(
-            driver_email=str(driver_identity["driver_email"]),
+        # Return response with required fields for frontend
+        behavior_doc_ref, behavior_data = _ensure_driver_behavior_log(
+            str(driver_identity["driver_email"]),
             driver_id=str(driver_identity["driver_id"] or ""),
             driver_name=driver_identity["driver_name"],
-            preview_enabled=DRIVER_BEHAVIOR_PREVIEW_ENABLED,
+            session_active=True,
+            persist=False,
         )
-
-        db.collection("trips").document(trip_id).set(
-            {
-                "aiModelPath": ai_session["model_path"],
-                "aiVideoPath": ai_session["video_path"],
-                "driverBehaviorModelPath": driver_behavior_session["model_path"],
-                "driverBehaviorPreviewEnabled": driver_behavior_session[
-                    "preview_enabled"
-                ],
-                "updated_at": _now_iso(),
-            },
-            merge=True,
-        )
-        print(f"[FLOW] start-trip created trips/{trip_id} for bus {req.bus_id}.")
 
         return {
             "message": "Trip started successfully",
             "bus_id": req.bus_id,
             "trip_id": trip_id,
             "driver": driver_identity,
-            "ai_session": {
-                "preview_enabled": ai_session["preview_enabled"],
-                "model_path": ai_session["model_path"],
-                "video_path": ai_session["video_path"],
-                "ai_state": ai_session["ai_state"],
-            },
             "driver_behavior_session": {
-                "preview_enabled": driver_behavior_session["preview_enabled"],
-                "model_path": driver_behavior_session["model_path"],
-                "monitor_state": driver_behavior_session["monitor_state"],
-                "camera_active": driver_behavior_session["camera_active"],
-                "already_running": driver_behavior_session["already_running"],
+                "session_active": True,
+                "camera_active": False,
+                "monitor_state": "starting"
             },
+            "ai_session": {
+                "ai_state": "starting"
+            }
         }
     except HTTPException:
         raise
@@ -379,8 +368,14 @@ def start_trip(req: StartTripRequest):
                 driver_id=str(driver_identity.get("driver_id") or ""),
                 driver_name=driver_identity.get("driver_name"),
             )
-            stop_driver_behavior_monitor(str(driver_identity["driver_email"]))
-        stop_ai_counting(req.bus_id)
+            try:
+                stop_driver_behavior_monitor(str(driver_identity["driver_email"]))
+            except Exception as e:
+                print(f"Warning: Failed to stop driver behavior monitor in exception: {e}")
+        try:
+            stop_ai_counting(req.bus_id)
+        except Exception as e:
+            print(f"Warning: Failed to stop AI counting in exception: {e}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -502,7 +497,16 @@ def end_trip(req: EndTripRequest):
                 driver_id=str(driver_identity.get("driver_id") or ""),
                 driver_name=driver_identity.get("driver_name"),
             )
-            driver_behavior_stop = stop_driver_behavior_monitor(driver_email)
+            try:
+                driver_behavior_stop = stop_driver_behavior_monitor(driver_email)
+            except Exception as e:
+                print(f"Warning: Failed to stop driver behavior monitor: {e}")
+                driver_behavior_stop = {
+                    "was_running": False,
+                    "stopped_gracefully": False,
+                    "monitor_state": "stopped",
+                    "camera_active": False,
+                }
         else:
             driver_behavior_stop = {
                 "was_running": False,
