@@ -67,25 +67,16 @@ def _summary_from_items(items: list[FeedbackResponse]) -> tuple[float, dict[str,
 class FeedbackService:
     @staticmethod
     def get_latest_completed_trip() -> tuple[str, dict] | None:
-        latest_trip: tuple[str, dict] | None = None
-        latest_end_time = ""
-
-        for doc in db.collection("trips").stream():
-            data = doc.to_dict() or {}
-            if str(data.get("status", "")).lower() != "completed":
-                continue
-
-            end_time = str(
-                data.get("actualEndTime")
-                or data.get("updated_at")
-                or data.get("date")
-                or ""
-            )
-            if end_time >= latest_end_time:
-                latest_end_time = end_time
-                latest_trip = (doc.id, data)
-
-        return latest_trip
+        docs = (
+            db.collection("trips")
+            .where(filter=FieldFilter("status", "in", ["completed", "COMPLETED"]))
+            .order_by("actualEndTime", direction="DESCENDING")
+            .limit(1)
+            .stream()
+        )
+        for doc in docs:
+            return doc.id, doc.to_dict() or {}
+        return None
 
     @staticmethod
     def assert_latest_completed_trip(trip_id: str) -> tuple[str, dict]:

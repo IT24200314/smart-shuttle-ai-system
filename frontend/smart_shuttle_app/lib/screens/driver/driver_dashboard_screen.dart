@@ -69,7 +69,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       if (!provider.sessionActive) return;
 
       provider.tickSecond();
-      if (provider.tripDurationSeconds % 3 == 0) {
+      if (provider.tripDurationSeconds % 10 == 0) {
         _fetchSafetyScore();
         _fetchLiveTelemetry();
       }

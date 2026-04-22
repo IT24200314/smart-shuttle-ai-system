@@ -41,10 +41,9 @@ def get_admin_summary():
             .where(filter=FieldFilter('status', '==', 'active'))
             .stream()
         )
-        users = [
-            doc for doc in db.collection('users').stream()
-            if str((doc.to_dict() or {}).get('status', 'active')).lower() != 'deleted'
-        ]
+        # Fetch only the 'status' field to avoid pulling the entire user documents
+        users_stream = db.collection('users').select(['status']).stream()
+        users_count = sum(1 for doc in users_stream if str((doc.to_dict() or {}).get('status', 'active')).lower() != 'deleted')
 
         # Fetch real alerts
         alerts_list = []
@@ -66,7 +65,7 @@ def get_admin_summary():
                 active_buses=_safe_size(live_buses),
                 risk_alerts=_safe_size(alerts_docs),
                 system_health=99.4,
-                registered_users=_safe_size(users),
+                registered_users=users_count,
             ),
             alerts=alerts_list
         )

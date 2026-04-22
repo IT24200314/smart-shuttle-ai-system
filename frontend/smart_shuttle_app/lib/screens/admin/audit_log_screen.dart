@@ -23,7 +23,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     return FirebaseFirestore.instance
         .collection('audit_logs')
         .limit(200)
-        .snapshots();
+        .get()
+        .asStream(); // Use one-time fetch to save extensive reads
   }
 
   int _timestampPriorityValue(Map<String, dynamic> data) {

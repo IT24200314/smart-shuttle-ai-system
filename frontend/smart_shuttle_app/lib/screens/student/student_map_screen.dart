@@ -67,6 +67,7 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
   void _startPolling() {
     _pollTimer?.cancel();
+    _fetchFeedbackEligibility(); // Fetch once initially
     _refreshStudentData();
     _pollTimer = Timer.periodic(
       const Duration(seconds: 10),
@@ -76,7 +77,7 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
   Future<void> _refreshStudentData() async {
     await _fetchLiveLocation();
-    await _fetchFeedbackEligibility();
+    // Removed _fetchFeedbackEligibility() from periodic polling to reduce reads
   }
 
   Future<void> _fetchLiveLocation() async {

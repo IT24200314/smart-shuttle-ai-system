@@ -2,8 +2,13 @@ from fastapi import APIRouter, HTTPException
 from utils.firebase_config import db
 from models.schemas import GPSUpdateRequest
 from datetime import datetime
+import time
 
 router = APIRouter()
+
+# Simple TTL Cache for live location polling
+LIVE_LOCATION_CACHE = {}
+CACHE_TTL = 3.0  # seconds
 
 @router.get("/map/routes")
 def get_routes():
@@ -53,6 +58,11 @@ def update_gps(req: GPSUpdateRequest):
 @router.get("/map/live-location/{bus_id}")
 def get_live_location(bus_id: str = "NB-2341"):
     try:
+        now = time.time()
+        cached = LIVE_LOCATION_CACHE.get(bus_id)
+        if cached and now - cached["timestamp"] < CACHE_TTL:
+            return cached["data"]
+
         doc = db.collection('LIVE-STATUS').document(bus_id).get()
         if doc.exists:
             data = doc.to_dict()
@@ -70,7 +80,7 @@ def get_live_location(bus_id: str = "NB-2341"):
                 else estimated_passenger_count_live
             )
             peak_visible_count = data.get("peak_visible_count", effective_estimated_count)
-            return {
+            res = {
                 "bus_id": bus_id,
                 "lat_percent": data.get("latitude", 0.5), # match frontend naming
                 "lng_percent": data.get("longitude", 0.5), 
@@ -92,7 +102,9 @@ def get_live_location(bus_id: str = "NB-2341"):
                 "ai_state": data.get("ai_state", "idle"),
                 "last_updated": data.get("last_updated"),
             }
-        return {
+            LIVE_LOCATION_CACHE[bus_id] = {"timestamp": now, "data": res}
+            return res
+        fallback_res = {
             "bus_id": bus_id,
             "lat_percent": 0.5,
             "lng_percent": 0.5,
@@ -114,5 +126,7 @@ def get_live_location(bus_id: str = "NB-2341"):
             "ai_state": "offline",
             "last_updated": None,
         }
+        LIVE_LOCATION_CACHE[bus_id] = {"timestamp": now, "data": fallback_res}
+        return fallback_res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
