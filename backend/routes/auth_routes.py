@@ -1,6 +1,9 @@
 import uuid
 import logging
 import traceback
+import subprocess
+import sys
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
@@ -99,36 +102,38 @@ def login(req: AuthLoginRequest):
             except Exception:
                 existing_data = {}
 
-            yawn_count = int(
-                existing_data.get(
-                    "number_of_ywan",
-                    existing_data.get("number_of_yawn", 0),
-                )
-                or 0
-            )
             doc_ref.set(
                 {
                     "driver_id": user_id,
                     "driver_name": user_name,
                     "email": user.get("email"),
                     "date": date_str,
-                    "number_of_yawn": yawn_count,
-                    "number_of_usephone": int(
-                        existing_data.get("number_of_usephone", 0) or 0
-                    ),
-                    "number_of_drowsiness": int(
-                        existing_data.get("number_of_drowsiness", 0) or 0
-                    ),
-                    "safety_score": int(existing_data.get("safety_score", 100) or 100),
+                    'number_of_yawn': 0,
+                    'number_of_usephone': 0,
+                    'number_of_drowsiness': 0,
+                    'safety_score': 100,
                     "session_active": bool(
                         existing_data.get("session_active", False)
                     ),
                     "camera_active": bool(existing_data.get("camera_active", False)),
                     "monitor_state": existing_data.get("monitor_state", "ready"),
                     "updated_at": datetime.now().isoformat(),
+
+
                 },
                 merge=True,
             )
+            
+            # Spawn the driver camera monitoring script
+            script_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "driver_camera_working.py"
+            )
+            if os.path.exists(script_path):
+                try:
+                    subprocess.Popen([sys.executable, script_path, user.get("email")])
+                    logger.info(f"Spawned driver_camera_working.py for {user.get('email')}")
+                except Exception as e:
+                    logger.warning(f"Failed to spawn driver_camera_working.py: {e}")
 
         return {
             "message": "Login successful",

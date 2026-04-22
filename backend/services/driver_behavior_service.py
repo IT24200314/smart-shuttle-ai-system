@@ -35,7 +35,7 @@ def _project_root() -> Path:
 
 
 def _driver_camera_script() -> Path:
-    return _project_root() / "backend" / "driver_camera.py"
+    return _project_root() / "backend" / "driver_camera_working.py"
 
 
 def _driver_behavior_model_root() -> Path:
