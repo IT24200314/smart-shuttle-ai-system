@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -80,6 +82,36 @@ def _read_state_file(path: str) -> dict[str, Any]:
             return json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _is_pid_running(pid: int | None) -> bool:
+    if not pid or pid <= 0:
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _terminate_pid(pid: int) -> None:
+    if not _is_pid_running(pid):
+        return
+
+    sigkill = getattr(signal, "SIGKILL", signal.SIGTERM)
+    for sig in (signal.SIGTERM, sigkill):
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            return
+        time.sleep(0.4)
+        if not _is_pid_running(pid):
+            return
 
 
 def _first_present_int(
@@ -231,6 +263,40 @@ def _reconcile_finished_session(bus_id: str) -> dict[str, Any] | None:
 
     AI_SESSIONS.pop(bus_id, None)
     return None
+
+
+def _stop_stale_runtime(bus_id: str, grace_seconds: float = 2.0) -> dict[str, Any]:
+    session_paths = _session_paths(bus_id)
+    state_path = session_paths["state_path"]
+    stop_signal_path = session_paths["stop_signal_path"]
+    existing_state = _read_state_file(state_path)
+    pid = int(existing_state.get("pid", 0) or 0)
+
+    if not existing_state and not os.path.exists(state_path):
+        return {}
+
+    try:
+        Path(stop_signal_path).write_text(_now_iso(), encoding="utf-8")
+    except OSError:
+        pass
+
+    started = time.time()
+    last_state = existing_state
+    while time.time() - started < grace_seconds:
+        time.sleep(0.2)
+        next_state = _read_state_file(state_path)
+        if next_state:
+            last_state = next_state
+        ai_state = str(last_state.get("ai_state", "")).lower()
+        if ai_state in {"stopped", "completed", "failed", "idle"}:
+            break
+        if pid and not _is_pid_running(pid):
+            break
+
+    if pid and _is_pid_running(pid):
+        _terminate_pid(pid)
+
+    return last_state
 
 
 def _get_last_metrics(
@@ -397,6 +463,8 @@ class PassengerCountingSessionManager:
                 command,
                 cwd=str(_project_root()),
             )
+            initial_state["pid"] = process.pid
+            _write_state_file(session_paths["state_path"], initial_state)
             AI_SESSIONS[bus_id] = {
                 "process": process,
                 "trip_id": trip_id,
@@ -449,7 +517,8 @@ class PassengerCountingSessionManager:
             session = _reconcile_finished_session(bus_id)
 
         if not session:
-            metrics = self.get_last_metrics(bus_id)
+            stale_state = _stop_stale_runtime(bus_id)
+            metrics = self.get_last_metrics(bus_id, stale_state)
             _update_live_status(
                 bus_id,
                 {

@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-04-25T18:09:54",
+  "project_root": "C:\\suttle project\\smart-shuttle-ai-system",
+  "dataset_yaml": "C:\\suttle project\\smart-shuttle-ai-system\\ai_models\\passenger_counting\\datasets\\smart_bus_final\\data.yaml",
+  "epochs": 100,
+  "img_size": 640,
+  "batch": 8,
+  "patience": 20,
+  "workers": 4,
+  "device": "cpu",
+  "models_to_compare": {
+    "YOLOv8s": "yolov8s.pt",
+    "YOLOv10s": "yolov10s.pt",
+    "YOLO11s": "yolo11s.pt"
+  },
+  "python": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+  "torch_version": "2.10.0+cpu",
+  "cuda_available": false,
+  "gpu_name": "CPU"
+}

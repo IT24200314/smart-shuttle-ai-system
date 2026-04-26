@@ -1,0 +1,20 @@
+Smart Shuttle AI - Viva Model Comparison Summary
+
+Fairness settings used across all models:
+- Same dataset: ai_models/passenger_counting/datasets/smart_bus_final/data.yaml
+- Same image size: 640
+- Same epochs: 150
+- Same early stopping patience: 20
+- Same device: CUDA GPU (device=0)
+- Same batch strategy: 16, fallback to 8 only on CUDA out-of-memory
+
+Best model selection method:
+- Primary: highest Best mAP50-95 from each model's results.csv
+- Tie-breaker: highest Best mAP50
+
+Selected best model: YOLOv8s
+Best mAP50-95: 0.8246 at epoch 28
+Best mAP50: 0.9862 at epoch 34
+
+Comparison CSV: C:\suttle project\smart-shuttle-ai-system\viva_model_comparison_proof\comparison_results.csv
+Comparison chart: C:\suttle project\smart-shuttle-ai-system\viva_model_comparison_proof\comparison_chart.png

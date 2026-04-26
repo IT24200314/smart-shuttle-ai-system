@@ -24,6 +24,11 @@ from services.user_service import UserService, normalize_email
 from utils.firebase_config import db
 
 
+STALE_ACTIVE_TRIP_TTL_SECONDS = 30.0
+TERMINAL_AI_STATES = {"stopped", "completed", "failed", "idle"}
+INACTIVE_LIVE_STATUS = "inactive"
+
+
 def _now_iso() -> str:
     return datetime.now().isoformat()
 
@@ -40,6 +45,48 @@ def _safe_live_status_data(bus_id: str):
     if not live_doc.exists:
         return live_doc, {}
     return live_doc, live_doc.to_dict() or {}
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _is_timestamp_stale(value: Any, max_age_seconds: float) -> bool:
+    parsed = _parse_iso_datetime(value)
+    if parsed is None:
+        return True
+    now = datetime.now(parsed.tzinfo) if parsed.tzinfo else datetime.now()
+    return (now - parsed).total_seconds() > max_age_seconds
+
+
+def _normalize_trip_status(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _normalize_ai_state(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _extract_trip_type(live_data: dict[str, Any]) -> str | None:
+    trip_type = str(live_data.get("tripType") or live_data.get("trip_type") or "").strip()
+    return trip_type or None
+
+
+def _get_trip_data(trip_id: str | None) -> dict[str, Any]:
+    if not trip_id:
+        return {}
+    snapshot = db.collection("trips").document(trip_id).get()
+    if not snapshot.exists:
+        return {}
+    return snapshot.to_dict() or {}
 
 
 def _generate_trip_id() -> str:
@@ -139,6 +186,15 @@ def _extract_driver_email(live_data: dict[str, Any]) -> str | None:
     return None
 
 
+def _build_driver_behavior_stop_fallback() -> dict[str, Any]:
+    return {
+        "was_running": False,
+        "stopped_gracefully": True,
+        "monitor_state": "stopped",
+        "camera_active": False,
+    }
+
+
 def _ensure_driver_behavior_log(
     driver_email: str,
     *,
@@ -216,6 +272,248 @@ def _set_driver_session_flag(
     doc_ref.set(update_payload, merge=True)
 
 
+def _compute_stop_metrics(
+    bus_id: str,
+    live_data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, int], int, int]:
+    refreshed_doc, refreshed_data = _safe_live_status_data(bus_id)
+    latest_live_data = refreshed_data if refreshed_doc.exists else live_data
+    final_metrics = passenger_counting_session_manager.get_last_metrics(
+        bus_id,
+        latest_live_data,
+    )
+    final_estimated_passenger_count = (
+        final_metrics["final_estimated_passenger_count"]
+        if final_metrics["final_estimated_passenger_count"] > 0
+        else final_metrics["estimated_passenger_count"]
+    )
+    estimated_passenger_count_live = (
+        final_metrics["estimated_passenger_count_live"]
+        if final_metrics["estimated_passenger_count_live"] > 0
+        else final_estimated_passenger_count
+    )
+    return (
+        latest_live_data,
+        final_metrics,
+        final_estimated_passenger_count,
+        estimated_passenger_count_live,
+    )
+
+
+def _update_trip_as_stopped(
+    trip_id: str | None,
+    *,
+    bus_id: str,
+    live_data: dict[str, Any],
+    final_estimated_passenger_count: int,
+    estimated_passenger_count_live: int,
+    peak_visible_count: int,
+    reason: str | None = None,
+) -> None:
+    if not trip_id:
+        return
+
+    payload = {
+        "status": "stopped",
+        "busId": bus_id,
+        "tripType": _extract_trip_type(live_data),
+        "driverId": live_data.get("driver_id"),
+        "driverEmail": live_data.get("driver_email"),
+        "driverName": live_data.get("driver_name"),
+        "actualStartTime": live_data.get("started_at"),
+        "actualEndTime": _now_iso(),
+        "aiPassengerCount": final_estimated_passenger_count,
+        "estimatedPassengerCount": final_estimated_passenger_count,
+        "finalEstimatedPassengerCount": final_estimated_passenger_count,
+        "liveEstimatedPassengerCountAtEnd": estimated_passenger_count_live,
+        "peakVisibleCount": peak_visible_count,
+        "updated_at": _now_iso(),
+    }
+    if reason:
+        payload["stopReason"] = reason
+    db.collection("trips").document(trip_id).set(payload, merge=True)
+
+
+def _set_live_status_inactive(
+    bus_id: str,
+    live_data: dict[str, Any],
+    *,
+    final_estimated_passenger_count: int,
+    estimated_passenger_count_live: int,
+    peak_visible_count: int,
+    current_detected_count: int,
+    preserve_trip_context: bool,
+    reason: str | None = None,
+) -> None:
+    payload = {
+        "status": INACTIVE_LIVE_STATUS,
+        "trip_id": live_data.get("trip_id") if preserve_trip_context else None,
+        "tripType": _extract_trip_type(live_data) if preserve_trip_context else None,
+        "passenger_count": (
+            final_estimated_passenger_count if preserve_trip_context else 0
+        ),
+        "current_detected_count": current_detected_count if preserve_trip_context else 0,
+        "peak_visible_count": peak_visible_count if preserve_trip_context else 0,
+        "estimated_passenger_count_live": (
+            estimated_passenger_count_live if preserve_trip_context else 0
+        ),
+        "final_estimated_passenger_count": (
+            final_estimated_passenger_count if preserve_trip_context else 0
+        ),
+        "estimated_passenger_count": (
+            final_estimated_passenger_count if preserve_trip_context else 0
+        ),
+        "ai_state": "stopped" if preserve_trip_context else "idle",
+        "driver_id": live_data.get("driver_id") if preserve_trip_context else None,
+        "driver_email": (
+            live_data.get("driver_email") if preserve_trip_context else None
+        ),
+        "driver_name": live_data.get("driver_name") if preserve_trip_context else None,
+        "started_at": live_data.get("started_at") if preserve_trip_context else None,
+        "ready_for_finalization": preserve_trip_context,
+        "last_stop_reason": reason,
+        "last_updated": _now_iso(),
+    }
+    db.collection("LIVE-STATUS").document(bus_id).set(payload, merge=True)
+
+
+def _stop_bus_runtimes(
+    bus_id: str,
+    live_data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    driver_email = _extract_driver_email(live_data)
+    if driver_email:
+        _set_driver_session_flag(
+            driver_email,
+            False,
+            driver_id=str(live_data.get("driver_id") or ""),
+            driver_name=str(live_data.get("driver_name") or "") or None,
+        )
+        driver_behavior_stop = driver_behavior_session_manager.stop(driver_email)
+    else:
+        driver_behavior_stop = _build_driver_behavior_stop_fallback()
+
+    passenger_counting_stop = passenger_counting_session_manager.stop(bus_id)
+    return passenger_counting_stop, driver_behavior_stop
+
+
+def _build_stop_response(
+    *,
+    bus_id: str,
+    latest_live_data: dict[str, Any],
+    final_metrics: dict[str, int],
+    final_estimated_passenger_count: int,
+    estimated_passenger_count_live: int,
+    passenger_counting_session: dict[str, Any],
+    driver_behavior_session: dict[str, Any],
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "message": message,
+        "bus_id": bus_id,
+        "trip_id": latest_live_data.get("trip_id"),
+        "trip_type": _extract_trip_type(latest_live_data),
+        "passenger_count": final_estimated_passenger_count,
+        "estimated_passenger_count": final_estimated_passenger_count,
+        "estimated_passenger_count_live": estimated_passenger_count_live,
+        "final_estimated_passenger_count": final_estimated_passenger_count,
+        "peak_visible_count": final_metrics["peak_visible_count"],
+        "current_detected_count": final_metrics["current_detected_count"],
+        "ai_state": latest_live_data.get(
+            "ai_state",
+            passenger_counting_session.get("ai_state", "stopped"),
+        ),
+        "stopped_gracefully": passenger_counting_session.get(
+            "stopped_gracefully",
+            True,
+        ),
+        "passenger_counting_session": passenger_counting_session,
+        "driver_behavior_session": driver_behavior_session,
+    }
+
+
+def _should_cleanup_stale_active_trip(
+    bus_id: str,
+    live_data: dict[str, Any],
+) -> tuple[bool, str | None]:
+    reasons: list[str] = []
+    ai_state = _normalize_ai_state(live_data.get("ai_state"))
+    if ai_state in TERMINAL_AI_STATES:
+        reasons.append(f"ai_state={ai_state}")
+
+    if _is_timestamp_stale(
+        live_data.get("last_updated"),
+        STALE_ACTIVE_TRIP_TTL_SECONDS,
+    ):
+        reasons.append("live_status_last_updated_stale")
+
+    trip_status = _normalize_trip_status(
+        _get_trip_data(str(live_data.get("trip_id") or "")).get("status")
+    )
+    if trip_status and trip_status != "active":
+        reasons.append(f"trip_status={trip_status}")
+
+    return bool(reasons), ", ".join(reasons) if reasons else None
+
+
+def _cleanup_stale_active_trip(
+    bus_id: str,
+    live_data: dict[str, Any],
+    *,
+    force: bool = False,
+) -> bool:
+    should_cleanup, reason = _should_cleanup_stale_active_trip(bus_id, live_data)
+    if not should_cleanup and not force:
+        return False
+
+    cleanup_reason = reason or "start_session_requested_with_active_status"
+
+    passenger_stop, driver_stop = _stop_bus_runtimes(bus_id, live_data)
+    (
+        latest_live_data,
+        final_metrics,
+        final_estimated_passenger_count,
+        estimated_passenger_count_live,
+    ) = _compute_stop_metrics(bus_id, live_data)
+    _update_trip_as_stopped(
+        str(latest_live_data.get("trip_id") or live_data.get("trip_id") or ""),
+        bus_id=bus_id,
+        live_data=latest_live_data or live_data,
+        final_estimated_passenger_count=final_estimated_passenger_count,
+        estimated_passenger_count_live=estimated_passenger_count_live,
+        peak_visible_count=final_metrics["peak_visible_count"],
+        reason=f"stale_active_trip_cleanup: {cleanup_reason}",
+    )
+    _set_live_status_inactive(
+        bus_id,
+        latest_live_data or live_data,
+        final_estimated_passenger_count=final_estimated_passenger_count,
+        estimated_passenger_count_live=estimated_passenger_count_live,
+        peak_visible_count=final_metrics["peak_visible_count"],
+        current_detected_count=final_metrics["current_detected_count"],
+        preserve_trip_context=False,
+        reason=f"stale_active_trip_cleanup: {cleanup_reason}",
+    )
+    print(
+        f"[FLOW] Cleaned stale active trip lock for {bus_id}. "
+        f"Reason: {cleanup_reason}. Passenger stop={passenger_stop.get('was_running')} "
+        f"Driver stop={driver_stop.get('was_running')}"
+    )
+    return True
+
+
+def _can_finalize_stopped_trip(live_data: dict[str, Any]) -> bool:
+    status = _normalize_trip_status(live_data.get("status"))
+    ai_state = _normalize_ai_state(live_data.get("ai_state"))
+    trip_id = str(live_data.get("trip_id") or "").strip()
+    return (
+        status == INACTIVE_LIVE_STATUS
+        and bool(trip_id)
+        and bool(live_data.get("ready_for_finalization"))
+        and ai_state in TERMINAL_AI_STATES
+    )
+
+
 class DriverSessionCoordinator:
     """Coordinates trip lifecycle while delegating AI work to dedicated services."""
 
@@ -226,6 +524,18 @@ class DriverSessionCoordinator:
         try:
             driver_identity = _resolve_driver_identity(req.driver_id, req.driver_email)
             live_doc, live_data = _safe_live_status_data(req.bus_id)
+            if live_doc.exists and str(live_data.get("status", "")).lower() == "active":
+                print(
+                    "[FLOW] Stale active trip found. "
+                    "Cleaning before starting new session."
+                )
+                cleaned = _cleanup_stale_active_trip(
+                    req.bus_id,
+                    live_data,
+                    force=True,
+                )
+                if cleaned:
+                    live_doc, live_data = _safe_live_status_data(req.bus_id)
             if live_doc.exists and str(live_data.get("status", "")).lower() == "active":
                 raise HTTPException(
                     status_code=400,
@@ -280,6 +590,8 @@ class DriverSessionCoordinator:
                     "driver_email": driver_identity["driver_email"],
                     "driver_name": driver_identity["driver_name"],
                     "last_updated": timestamp,
+                    "ready_for_finalization": False,
+                    "last_stop_reason": None,
                 },
                 merge=True,
             )
@@ -314,6 +626,12 @@ class DriverSessionCoordinator:
                     "aiModelPath": passenger_counting_session["model_path"],
                     "aiVideoPath": passenger_counting_session["video_path"],
                     "driverBehaviorModelPath": driver_behavior_session["model_path"],
+                    "driverBehaviorYawnModelPath": driver_behavior_session[
+                        "yawn_model_path"
+                    ],
+                    "driverBehaviorPhoneModelPath": driver_behavior_session[
+                        "phone_model_path"
+                    ],
                     "driverBehaviorPreviewEnabled": driver_behavior_session[
                         "preview_enabled"
                     ],
@@ -343,6 +661,8 @@ class DriverSessionCoordinator:
                 "driver_behavior_session": {
                     "preview_enabled": driver_behavior_session["preview_enabled"],
                     "model_path": driver_behavior_session["model_path"],
+                    "yawn_model_path": driver_behavior_session["yawn_model_path"],
+                    "phone_model_path": driver_behavior_session["phone_model_path"],
                     "monitor_state": driver_behavior_session["monitor_state"],
                     "camera_active": driver_behavior_session["camera_active"],
                     "already_running": driver_behavior_session["already_running"],
@@ -362,7 +682,7 @@ class DriverSessionCoordinator:
                 )
             db.collection("LIVE-STATUS").document(req.bus_id).set(
                 {
-                    "status": "idle",
+                    "status": INACTIVE_LIVE_STATUS,
                     "tripType": None,
                     "trip_id": None,
                     "current_detected_count": 0,
@@ -375,6 +695,8 @@ class DriverSessionCoordinator:
                     "driver_id": None,
                     "driver_email": None,
                     "driver_name": None,
+                    "ready_for_finalization": False,
+                    "last_stop_reason": "start_trip_failed",
                     "last_updated": _now_iso(),
                 },
                 merge=True,
@@ -393,66 +715,66 @@ class DriverSessionCoordinator:
     def stop_session(self, req: StopSessionRequest) -> dict[str, Any]:
         try:
             live_doc, live_data = _safe_live_status_data(req.bus_id)
-            if not live_doc.exists or str(live_data.get("status", "")).lower() != "active":
+            if not live_doc.exists:
+                raise HTTPException(
+                    status_code=400,
+                    detail="There is no active trip session for this bus",
+                )
+            status = _normalize_trip_status(live_data.get("status"))
+            if status != "active" and not _can_finalize_stopped_trip(live_data):
                 raise HTTPException(
                     status_code=400,
                     detail="There is no active trip session for this bus",
                 )
 
-            driver_email = _extract_driver_email(live_data)
-            if driver_email:
-                _set_driver_session_flag(
-                    driver_email,
-                    False,
-                    driver_id=str(live_data.get("driver_id") or ""),
-                    driver_name=str(live_data.get("driver_name") or "") or None,
-                )
-                driver_behavior_stop = driver_behavior_session_manager.stop(driver_email)
-            else:
-                driver_behavior_stop = {
-                    "was_running": False,
-                    "stopped_gracefully": True,
-                    "monitor_state": "stopped",
-                    "camera_active": False,
-                }
-
-            passenger_counting_stop = passenger_counting_session_manager.stop(req.bus_id)
-            refreshed_doc, refreshed_data = _safe_live_status_data(req.bus_id)
-            latest_live_data = refreshed_data if refreshed_doc.exists else live_data
-            final_metrics = passenger_counting_session_manager.get_last_metrics(
+            passenger_counting_stop, driver_behavior_stop = _stop_bus_runtimes(
+                req.bus_id,
+                live_data,
+            )
+            (
+                latest_live_data,
+                final_metrics,
+                final_estimated_passenger_count,
+                estimated_passenger_count_live,
+            ) = _compute_stop_metrics(req.bus_id, live_data)
+            _update_trip_as_stopped(
+                str(latest_live_data.get("trip_id") or live_data.get("trip_id") or ""),
+                bus_id=req.bus_id,
+                live_data=latest_live_data,
+                final_estimated_passenger_count=final_estimated_passenger_count,
+                estimated_passenger_count_live=estimated_passenger_count_live,
+                peak_visible_count=final_metrics["peak_visible_count"],
+                reason="driver_stop_session",
+            )
+            _set_live_status_inactive(
                 req.bus_id,
                 latest_live_data,
+                final_estimated_passenger_count=final_estimated_passenger_count,
+                estimated_passenger_count_live=estimated_passenger_count_live,
+                peak_visible_count=final_metrics["peak_visible_count"],
+                current_detected_count=final_metrics["current_detected_count"],
+                preserve_trip_context=True,
+                reason="driver_stop_session",
             )
-            final_estimated_passenger_count = (
-                final_metrics["final_estimated_passenger_count"]
-                if final_metrics["final_estimated_passenger_count"] > 0
-                else final_metrics["estimated_passenger_count"]
-            )
-            estimated_passenger_count_live = (
-                final_metrics["estimated_passenger_count_live"]
-                if final_metrics["estimated_passenger_count_live"] > 0
-                else final_estimated_passenger_count
-            )
-
-            return {
-                "message": "AI session stopped successfully",
-                "bus_id": req.bus_id,
-                "trip_id": latest_live_data.get("trip_id"),
-                "trip_type": latest_live_data.get("tripType"),
-                "passenger_count": final_estimated_passenger_count,
-                "estimated_passenger_count": final_estimated_passenger_count,
-                "estimated_passenger_count_live": estimated_passenger_count_live,
-                "final_estimated_passenger_count": final_estimated_passenger_count,
-                "peak_visible_count": final_metrics["peak_visible_count"],
-                "current_detected_count": final_metrics["current_detected_count"],
-                "ai_state": latest_live_data.get(
-                    "ai_state",
-                    passenger_counting_stop["ai_state"],
-                ),
-                "stopped_gracefully": passenger_counting_stop["stopped_gracefully"],
-                "passenger_counting_session": passenger_counting_stop,
-                "driver_behavior_session": driver_behavior_stop,
+            latest_live_data = {
+                **latest_live_data,
+                "status": INACTIVE_LIVE_STATUS,
+                "ai_state": "stopped",
             }
+            return _build_stop_response(
+                bus_id=req.bus_id,
+                latest_live_data=latest_live_data,
+                final_metrics=final_metrics,
+                final_estimated_passenger_count=final_estimated_passenger_count,
+                estimated_passenger_count_live=estimated_passenger_count_live,
+                passenger_counting_session=passenger_counting_stop,
+                driver_behavior_session=driver_behavior_stop,
+                message=(
+                    "AI session already stopped and ready for finalization"
+                    if status != "active"
+                    else "AI session stopped successfully"
+                ),
+            )
         except HTTPException:
             raise
         except Exception as exc:
@@ -574,7 +896,7 @@ class DriverSessionCoordinator:
 
             db.collection("LIVE-STATUS").document(req.bus_id).set(
                 {
-                    "status": "idle",
+                    "status": INACTIVE_LIVE_STATUS,
                     "trip_id": None,
                     "tripType": None,
                     "passenger_count": 0,
@@ -588,6 +910,8 @@ class DriverSessionCoordinator:
                     "driver_email": None,
                     "driver_name": None,
                     "started_at": None,
+                    "ready_for_finalization": False,
+                    "last_stop_reason": None,
                     "last_updated": _now_iso(),
                 },
                 merge=True,

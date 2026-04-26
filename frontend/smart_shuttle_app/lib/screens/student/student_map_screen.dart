@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:js' as js; // Needed for map availability check on web
 import 'package:http/http.dart' as http;
 import '../../theme/app_theme.dart';
 import '../../providers/app_state_provider.dart';
@@ -21,13 +24,26 @@ class StudentMapScreen extends StatefulWidget {
   State<StudentMapScreen> createState() => _StudentMapScreenState();
 }
 
-class _StudentMapScreenState extends State<StudentMapScreen>
-    with TickerProviderStateMixin {
+class _StudentMapScreenState extends State<StudentMapScreen> with TickerProviderStateMixin {
   late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
-  Timer? _pollTimer;
 
-  Offset _busPos = const Offset(0.10, 0.70); // Default to start
+  final Completer<GoogleMapController> _mapController = Completer();
+  bool _autoCenterOnBus = false;
+  
+  // -- Map Stability States --
+  bool _isMapAvailable = false;
+  bool _isMapChecking = true;
+  String? _mapInitError;
+  
+  Timer? _pollTimer;
+  StreamSubscription<Position>? _positionStream;
+
+  // Student's real-time position
+  LatLng? _userPos;
+
+  // Bus position from backend (SLIIT Kandy location approx as default)
+  LatLng _busPos = const LatLng(7.2801, 80.7020);
+  
   String _busId = 'NB-2341';
   int _currentSpeed = 0;
   String _stopStatus = 'En route';
@@ -42,32 +58,64 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     'Route C — Hostel Block',
   ];
 
-  final List<Offset> _waypoints = const [
-    Offset(0.10, 0.70),
-    Offset(0.25, 0.52),
-    Offset(0.42, 0.40),
-    Offset(0.58, 0.36),
-    Offset(0.74, 0.48),
-    Offset(0.88, 0.58),
-  ];
-
   @override
   void initState() {
     super.initState();
     _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
+       vsync: this,
+       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
 
+    _startUserLocationTracking();
     _startPolling();
+    _verifyMapAvailability();
+  }
+
+  /// Checks if the Google Maps library is actually loaded (critical for Web)
+  Future<void> _verifyMapAvailability() async {
+    if (!kIsWeb) {
+      if (mounted) setState(() { _isMapAvailable = true; _isMapChecking = false; });
+      return;
+    }
+
+    // Give JS a moment to initialize
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    try {
+      // Check if 'google' and 'google.maps' exist in the JS context
+      final googleExists = js.context.hasProperty('google');
+      if (googleExists) {
+        final google = js.context['google'];
+        final mapsExists = google != null && google.hasProperty('maps');
+        
+        if (mapsExists) {
+          if (mounted) setState(() { _isMapAvailable = true; _isMapChecking = false; });
+          return;
+        }
+      }
+      throw 'Google Maps JS SDK not found. Check your API key and connection.';
+    } catch (e) {
+      debugPrint('Map verification failed: $e');
+      if (mounted) {
+        setState(() {
+          _isMapAvailable = false;
+          _isMapChecking = false;
+          _mapInitError = e.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _retryMapInit() async {
+    setState(() {
+      _isMapChecking = true;
+      _mapInitError = null;
+    });
+    await _verifyMapAvailability();
   }
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _fetchFeedbackEligibility(); // Fetch once initially
     _refreshStudentData();
     _pollTimer = Timer.periodic(
       const Duration(seconds: 10),
@@ -77,45 +125,41 @@ class _StudentMapScreenState extends State<StudentMapScreen>
 
   Future<void> _refreshStudentData() async {
     await _fetchLiveLocation();
-    // Removed _fetchFeedbackEligibility() from periodic polling to reduce reads
+    await _fetchFeedbackEligibility();
+    if (_autoCenterOnBus) {
+      _centerOnBus(); 
+    }
   }
 
   Future<void> _fetchLiveLocation() async {
     try {
-      final res = await http
-          .get(
-            Uri.parse('${ApiConfig.baseUrl}/map/live-location'),
-          )
+      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/map/live-location'))
           .timeout(const Duration(seconds: 2));
 
       if (res.statusCode == 200 && mounted) {
         final data = Map<String, dynamic>.from(json.decode(res.body));
         setState(() {
-          _busPos = Offset(
-            (data['lat_percent'] ?? 0.5).toDouble(),
-            (data['lng_percent'] ?? 0.5).toDouble(),
-          );
+          // Backend sends raw coords in lat_percent/lng_percent
+          double lat = (data['lat_percent'] ?? 7.2801).toDouble();
+          double lng = (data['lng_percent'] ?? 80.7020).toDouble();
+          _busPos = LatLng(lat, lng);
           _busId = data['bus_id'] ?? 'NB-2341';
           _currentSpeed = data['speed'] ?? 0;
           _stopStatus = data['status'] ?? 'Active';
 
-          // Sync ETA if provided by backend
           if (data['eta_min'] != null) {
-            context.read<AppStateProvider>().setEta(data['eta_min']);
+             context.read<AppStateProvider>().setEta(data['eta_min']);
           }
         });
+        _updateMarkers();
       }
-    } catch (_) {
-      // Fail silently for polling
-    }
+    } catch (_) {}
   }
 
   Future<void> _fetchFeedbackEligibility() async {
     final appState = context.read<AppStateProvider>();
     final token = appState.jwtToken;
-    if (token == null ||
-        token.isEmpty ||
-        appState.currentRole != UserRole.student) {
+    if (token == null || token.isEmpty || appState.currentRole != UserRole.student) {
       if (!mounted) return;
       setState(() {
         _feedbackTripId = null;
@@ -157,8 +201,91 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     }
   }
 
+  Future<void> _startUserLocationTracking() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (!mounted) return;
+      setState(() {
+        _userPos = LatLng(position.latitude, position.longitude);
+      });
+      _updateMarkers();
+
+      _positionStream?.cancel();
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        ),
+      ).listen((pos) {
+        if (!mounted) return;
+        setState(() {
+          _userPos = LatLng(pos.latitude, pos.longitude);
+        });
+        _updateMarkers();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _centerOnBus() async {
+    if (!_mapController.isCompleted) return;
+    final controller = await _mapController.future;
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: _busPos, zoom: 16.5),
+      ),
+    );
+  }
+
+  Set<Marker> _markers = {};
+  void _updateMarkers() {
+    final markers = <Marker>{};
+
+    // Bus marker
+    markers.add(
+      Marker(
+        markerId: const MarkerId('bus_marker'),
+        position: _busPos,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(
+          title: 'Shuttle Bus',
+          snippet: 'Speed: $_currentSpeed km/h',
+        ),
+      ),
+    );
+
+    // User marker
+    if (_userPos != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user_marker'),
+          position: _userPos!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: const InfoWindow(title: 'You'),
+        ),
+      );
+    }
+    setState(() {
+      _markers = markers;
+    });
+  }
+
   @override
   void dispose() {
+    _positionStream?.cancel();
     _pollTimer?.cancel();
     _pulseCtrl.dispose();
     super.dispose();
@@ -197,250 +324,171 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     );
   }
 
+  Widget _buildMapLayer() {
+    if (_isMapChecking) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('Initializing Map...',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+          ],
+        ),
+      );
+    }
+
+    if (!_isMapAvailable || _mapInitError != null) {
+      return Container(
+        color: AppTheme.background,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.map_outlined, color: AppTheme.danger, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              'Map Connection Issue',
+              style: GoogleFonts.inter(
+                  color: AppTheme.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _mapInitError ?? 'The map could not be loaded on this device.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _retryMapInit,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry Initialization'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent.withOpacity(0.1),
+                foregroundColor: AppTheme.accent,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () {
+                setState(() => _isMapAvailable = true); // Risky force-try
+              },
+              child: Text('Force Load (Developer Mode)',
+                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    try {
+      return GoogleMap(
+        mapType: MapType.normal,
+        initialCameraPosition: CameraPosition(
+          target: _busPos,
+          zoom: 15.0,
+        ),
+        markers: _markers,
+        onMapCreated: (GoogleMapController controller) {
+          if (!_mapController.isCompleted) {
+            _mapController.complete(controller);
+          }
+          _updateMarkers();
+        },
+        myLocationEnabled: true,
+      );
+    } catch (e) {
+      return Center(
+        child: Text('Error rendering map: $e',
+            style: GoogleFonts.inter(color: AppTheme.danger)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Watch provider to rebuild on theme toggle
     context.watch<AppStateProvider>();
     final provider = context.watch<AppStateProvider>();
-    final size = MediaQuery.of(context).size;
-    final mapH = size.height * (size.width < 700 ? 0.46 : 0.56);
+    final media = MediaQuery.of(context).size;
+    final maxSheetHeight = media.height * (media.width < 700 ? 0.62 : 0.54);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: AppTheme.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppTheme.textSecondary, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Live Bus Tracker',
-                style: GoogleFonts.inter(
-                    color: AppTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700)),
-            Text('Student View',
-                style: GoogleFonts.inter(
-                    color: AppTheme.textSecondary, fontSize: 11)),
-          ],
-        ),
-        actions: [
-          const ThemeToggleButton(compact: true),
-          IconButton(
-            icon: Icon(Icons.refresh_rounded,
-                color: AppTheme.textSecondary, size: 20),
-            onPressed: _refreshStudentData,
-          ),
-          const SizedBox(width: 8),
-        ],
+         backgroundColor: AppTheme.surface,
+         elevation: 0,
+         leading: IconButton(
+           icon: Icon(Icons.arrow_back_ios_new_rounded,
+               color: AppTheme.textSecondary, size: 20),
+           onPressed: () => Navigator.pop(context),
+         ),
+         title: Column(
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             Text('Live Bus Tracker',
+                 style: GoogleFonts.inter(
+                     color: AppTheme.textPrimary,
+                     fontSize: 16,
+                     fontWeight: FontWeight.w700)),
+             Text('Student View',
+                 style: GoogleFonts.inter(
+                     color: AppTheme.textSecondary, fontSize: 11)),
+           ],
+         ),
+         actions: [
+           const ThemeToggleButton(compact: true),
+           IconButton(
+             tooltip: _autoCenterOnBus ? 'Auto-center ON' : 'Auto-center OFF',
+             icon: Icon(
+               _autoCenterOnBus ? Icons.my_location_rounded : Icons.location_searching_rounded,
+               color: _autoCenterOnBus ? AppTheme.accent : AppTheme.textSecondary,
+               size: 20,
+             ),
+             onPressed: () {
+               setState(() => _autoCenterOnBus = !_autoCenterOnBus);
+               if (_autoCenterOnBus) {
+                  _centerOnBus();
+               }
+             },
+           ),
+           IconButton(
+             icon: Icon(Icons.refresh_rounded, color: AppTheme.textSecondary, size: 20),
+             onPressed: _refreshStudentData,
+           ),
+           const SizedBox(width: 8),
+         ],
       ),
       body: Stack(
-        children: [
-          // ── Map Background ──────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: mapH,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppTheme.background,
-                    AppTheme.surface,
-                    AppTheme.background,
-                  ],
-                ),
-              ),
-              child: CustomPaint(painter: _GridPainter()),
-            ),
-          ),
+         children: [
+           // ── Google Map ──────────────────────────────────
+           Positioned.fill(
+             bottom: maxSheetHeight - 20, // Space for Bottom Sheet
+             child: _buildMapLayer(),
+           ),
 
-          // ── Route Polyline ──────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: mapH,
-            child: CustomPaint(
-              painter: _RoutePainter(
-                waypoints: _waypoints,
-                screenWidth: size.width,
-                mapHeight: mapH,
-              ),
-            ),
-          ),
-
-          // ── Real-time Bus Marker ───────────────────────────
-          Positioned(
-            left: (_busPos.dx * size.width - 20).clamp(0.0, size.width - 44),
-            top: (_busPos.dy * mapH).clamp(0.0, mapH - 44),
-            child: _BusMarker(pulseAnim: _pulseAnim),
-          ),
-
-          // ── Bottom Info Sheet ───────────────────────────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _BottomSheet(
-              provider: provider,
-              selectedRoute: _selectedRoute,
-              routes: _routes,
-              onRouteChanged: (r) => setState(() => _selectedRoute = r!),
-              busId: _busId,
-              currentSpeed: _currentSpeed,
-              stopStatus: _stopStatus,
-              feedbackTripId: _feedbackTripId,
-              feedbackTripType: _feedbackTripType,
-              onOpenFeedback: _openFeedback,
-              onOpenLostFound: _openLostFound,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Grid Painter ─────────────────────────────────────────────
-class _GridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final roadPaint = Paint()
-      ..color = AppTheme.borderStrong
-      ..strokeWidth = 12
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final minorPaint = Paint()
-      ..color = AppTheme.border
-      ..strokeWidth = 5
-      ..style = PaintingStyle.stroke;
-    final blockPaint = Paint()
-      ..color = AppTheme.surfaceHigh
-      ..style = PaintingStyle.fill;
-
-    final rng = Random(42);
-    for (int i = 0; i < 8; i++) {
-      for (int j = 0; j < 6; j++) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-              i * size.width / 7 + rng.nextDouble() * 8,
-              j * size.height / 5 + rng.nextDouble() * 8,
-              size.width / 9,
-              size.height / 7,
-            ),
-            const Radius.circular(4),
-          ),
-          blockPaint,
-        );
-      }
-    }
-    for (double y = 0; y < size.height; y += size.height / 4.5) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), roadPaint);
-    }
-    for (double x = 0; x < size.width; x += size.width / 4) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), roadPaint);
-    }
-    for (double y = size.height / 9; y < size.height; y += size.height / 4.5) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), minorPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ── Route Painter ─────────────────────────────────────────────
-class _RoutePainter extends CustomPainter {
-  final List<Offset> waypoints;
-  final double screenWidth;
-  final double mapHeight;
-  const _RoutePainter({
-    required this.waypoints,
-    required this.screenWidth,
-    required this.mapHeight,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppTheme.positive.withOpacity(0.9)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path();
-    for (int i = 0; i < waypoints.length; i++) {
-      final pt = Offset(
-        waypoints[i].dx * screenWidth,
-        waypoints[i].dy * mapHeight,
-      );
-      i == 0 ? path.moveTo(pt.dx, pt.dy) : path.lineTo(pt.dx, pt.dy);
-    }
-    canvas.drawPath(path, paint);
-
-    for (final w in waypoints) {
-      canvas.drawCircle(Offset(w.dx * screenWidth, w.dy * mapHeight), 5,
-          Paint()..color = AppTheme.positive);
-      canvas.drawCircle(Offset(w.dx * screenWidth, w.dy * mapHeight), 3,
-          Paint()..color = AppTheme.background);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-// ── Bus Marker ────────────────────────────────────────────────
-class _BusMarker extends StatelessWidget {
-  final Animation<double> pulseAnim;
-  const _BusMarker({required this.pulseAnim});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: pulseAnim,
-      builder: (_, __) => SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppTheme.positive.withOpacity(0.12 * pulseAnim.value),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: AppTheme.positive,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.positive.withOpacity(0.40),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Icon(Icons.directions_bus_rounded,
-                  color: AppTheme.onPositive, size: 16),
-            ),
-          ],
-        ),
+           // ── Bottom Info Sheet ───────────────────────────────
+           Positioned(
+             left: 0,
+             right: 0,
+             bottom: 0,
+             child: _BottomSheet(
+               provider: provider,
+               selectedRoute: _selectedRoute,
+               routes: _routes,
+               onRouteChanged: (r) => setState(() => _selectedRoute = r!),
+               busId: _busId,
+               currentSpeed: _currentSpeed,
+               stopStatus: _stopStatus,
+               feedbackTripId: _feedbackTripId,
+               feedbackTripType: _feedbackTripType,
+               onOpenFeedback: _openFeedback,
+               onOpenLostFound: _openLostFound,
+             ),
+           ),
+         ],
       ),
     );
   }
@@ -713,40 +761,33 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 220),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceHigh,
-          borderRadius: AppTheme.chipRadius,
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: AppTheme.positive, size: 14),
-            const SizedBox(width: 6),
-            Text(
-              '$label: ',
-              style: GoogleFonts.inter(
-                  color: AppTheme.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600),
-            ),
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                    color: AppTheme.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: AppTheme.chipRadius,
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.positive, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            '$label: ',
+            style: GoogleFonts.inter(
+                color: AppTheme.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+                color: AppTheme.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }

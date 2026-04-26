@@ -1,0 +1,17 @@
+{
+  "YOLOv8s": {
+    "status": "skipped",
+    "weights": "yolov8s.pt",
+    "reason": "RUN_TRAINING=False (using existing trained models if available)"
+  },
+  "YOLOv10s": {
+    "status": "skipped",
+    "weights": "yolov10s.pt",
+    "reason": "RUN_TRAINING=False (using existing trained models if available)"
+  },
+  "YOLO11s": {
+    "status": "skipped",
+    "weights": "yolo11s.pt",
+    "reason": "RUN_TRAINING=False (using existing trained models if available)"
+  }
+}

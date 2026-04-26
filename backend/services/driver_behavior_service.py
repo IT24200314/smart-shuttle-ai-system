@@ -35,7 +35,7 @@ def _project_root() -> Path:
 
 
 def _driver_camera_script() -> Path:
-    return _project_root() / "backend" / "driver_camera_working.py"
+    return _project_root() / "backend" / "driver_camera.py"
 
 
 def _driver_behavior_model_root() -> Path:
@@ -120,12 +120,12 @@ def _update_behavior_log(driver_email: str, payload: dict[str, Any]) -> None:
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _existing_model_candidates() -> list[Path]:
-    model_root = _driver_behavior_model_root()
+def _existing_model_candidates(model_family: str) -> list[Path]:
+    model_root = _driver_behavior_model_root() / model_family
     preferred = [
         model_root / "best.pt",
     ]
-    discovered = list(model_root.glob("**/best.pt"))
+    discovered = list(model_root.glob("**/best.pt")) if model_root.exists() else []
 
     unique_candidates: list[Path] = []
     seen: set[Path] = set()
@@ -138,14 +138,21 @@ def _existing_model_candidates() -> list[Path]:
     return unique_candidates
 
 
-def get_driver_behavior_model_path() -> str:
-    for candidate in _existing_model_candidates():
+def _get_required_model_path(model_family: str) -> str:
+    for candidate in _existing_model_candidates(model_family):
         return str(candidate)
 
     raise FileNotFoundError(
-        "No driver behavior model could be found. "
-        "Expected ai_models/driver_behavior/best.pt."
+        "No driver behavior model could be found for "
+        f"'{model_family}'. Expected ai_models/driver_behavior/{model_family}/best.pt."
     )
+
+
+def get_driver_behavior_model_paths() -> dict[str, str]:
+    return {
+        "yawn_model_path": _get_required_model_path("yawn"),
+        "phone_model_path": _get_required_model_path("phone"),
+    }
 
 
 def get_driver_behavior_runtime_config() -> dict[str, str]:
@@ -155,10 +162,11 @@ def get_driver_behavior_runtime_config() -> dict[str, str]:
             f"Driver behavior runtime script is missing at {script_path}"
         )
 
+    model_paths = get_driver_behavior_model_paths()
     return {
         "python_executable": sys.executable,
         "script_path": str(script_path),
-        "model_path": get_driver_behavior_model_path(),
+        **model_paths,
     }
 
 
@@ -299,6 +307,8 @@ def launch_driver_behavior_monitor(
                 "driver_id": driver_id,
                 "driver_name": driver_name,
                 "model_path": existing_session["model_path"],
+                "yawn_model_path": existing_session["yawn_model_path"],
+                "phone_model_path": existing_session["phone_model_path"],
                 "preview_enabled": existing_session["preview_enabled"],
                 "monitor_state": existing_state.get("monitor_state", "starting"),
                 "camera_active": bool(existing_state.get("camera_active", False)),
@@ -315,7 +325,9 @@ def launch_driver_behavior_monitor(
             "monitor_state": "starting",
             "camera_active": False,
             "preview_mode": "preview" if preview_enabled else "headless",
-            "model_path": runtime["model_path"],
+            "model_path": runtime["yawn_model_path"],
+            "yawn_model_path": runtime["yawn_model_path"],
+            "phone_model_path": runtime["phone_model_path"],
             "last_updated": _now_iso(),
         }
         _write_state_file(session_paths["state_path"], initial_state)
@@ -326,8 +338,10 @@ def launch_driver_behavior_monitor(
             runtime["script_path"],
             "--driver_email",
             normalized_email,
-            "--model_path",
-            runtime["model_path"],
+            "--yawn_model_path",
+            runtime["yawn_model_path"],
+            "--phone_model_path",
+            runtime["phone_model_path"],
             "--stop_signal_path",
             session_paths["stop_signal_path"],
             "--state_path",
@@ -352,7 +366,9 @@ def launch_driver_behavior_monitor(
             "driver_id": driver_id,
             "driver_name": driver_name,
             "preview_enabled": preview_enabled,
-            "model_path": runtime["model_path"],
+            "model_path": runtime["yawn_model_path"],
+            "yawn_model_path": runtime["yawn_model_path"],
+            "phone_model_path": runtime["phone_model_path"],
             **session_paths,
         }
 
@@ -371,7 +387,9 @@ def launch_driver_behavior_monitor(
             "email": normalized_email,
             "monitor_state": "starting",
             "camera_active": False,
-            "ai_model_path": runtime["model_path"],
+            "ai_model_path": runtime["yawn_model_path"],
+            "ai_yawn_model_path": runtime["yawn_model_path"],
+            "ai_phone_model_path": runtime["phone_model_path"],
             "ai_preview_mode": "preview" if preview_enabled else "headless",
         },
     )
@@ -380,7 +398,9 @@ def launch_driver_behavior_monitor(
         "driver_email": normalized_email,
         "driver_id": driver_id,
         "driver_name": driver_name,
-        "model_path": runtime["model_path"],
+        "model_path": runtime["yawn_model_path"],
+        "yawn_model_path": runtime["yawn_model_path"],
+        "phone_model_path": runtime["phone_model_path"],
         "preview_enabled": preview_enabled,
         "monitor_state": "starting",
         "camera_active": False,

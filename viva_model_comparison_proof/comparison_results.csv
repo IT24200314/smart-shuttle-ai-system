@@ -1,0 +1,4 @@
+Model Key,Model,Results CSV,Best mAP50,Best mAP50 Epoch,Best mAP50-95,Best mAP50-95 Epoch
+yolov8s,YOLOv8s,C:\suttle project\smart-shuttle-ai-system\viva_model_comparison_proof\yolov8s\results.csv,0.98621,34,0.8246,28
+yolo11s,YOLO11s,C:\suttle project\smart-shuttle-ai-system\viva_model_comparison_proof\yolo11s\results.csv,0.98548,65,0.82266,91
+yolov10s,YOLOv10s,C:\suttle project\smart-shuttle-ai-system\viva_model_comparison_proof\yolov10s\results.csv,0.98365,74,0.82133,79

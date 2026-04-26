@@ -1,0 +1,10 @@
+{
+  "path": "c:\\suttle project\\smart-shuttle-ai-system\\ai_models\\passenger_counting\\datasets\\smart_bus_final",
+  "train": "images/train",
+  "val": "images/val",
+  "test": "images/test",
+  "nc": 1,
+  "names": [
+    "head"
+  ]
+}

@@ -181,6 +181,7 @@ def _publish_runtime_state(
 ) -> None:
     full_payload = {
         **payload,
+        "pid": os.getpid(),
         "last_updated": _now_iso(),
     }
     _write_state_file(state_path, full_payload)

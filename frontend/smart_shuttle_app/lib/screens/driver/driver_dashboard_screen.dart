@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../providers/app_state_provider.dart';
 import '../../theme/app_theme.dart';
@@ -48,6 +49,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
   String? _latestBehaviorType;
   String? _latestBehaviorLabel;
   String? _latestBehaviorAt;
+  StreamSubscription<Position>? _gpsSubscription;
 
   @override
   void initState() {
@@ -69,7 +71,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       if (!provider.sessionActive) return;
 
       provider.tickSecond();
-      if (provider.tripDurationSeconds % 10 == 0) {
+      if (provider.tripDurationSeconds % 3 == 0) {
         _fetchSafetyScore();
         _fetchLiveTelemetry();
       }
@@ -79,8 +81,52 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
   @override
   void dispose() {
     _timer?.cancel();
+    _gpsSubscription?.cancel();
     _btnCtrl.dispose();
     super.dispose();
+  }
+
+  void _manageGpsTracking(bool active) async {
+    if (active) {
+      _gpsSubscription?.cancel();
+
+      // Check permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      _gpsSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      ).listen((pos) {
+        _updateGpsOnBackend(pos);
+      });
+    } else {
+      _gpsSubscription?.cancel();
+      _gpsSubscription = null;
+    }
+  }
+
+  Future<void> _updateGpsOnBackend(Position pos) async {
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/gps/update-location'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'bus_id': _busId,
+          'latitude': pos.latitude,
+          'longitude': pos.longitude,
+          'speed': (pos.speed * 3.6).round(), // m/s to km/h
+        }),
+      );
+    } catch (_) {}
   }
 
   Future<void> _fetchSafetyScore() async {
@@ -208,6 +254,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
             _latestBehaviorAt = null;
           });
           provider.beginDriverSession();
+          _manageGpsTracking(true);
           _showSuccess(
             'Passenger counting preview and driver behavior monitoring are now active.',
           );
@@ -288,6 +335,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
       if (endRes.statusCode == 200) {
         if (!mounted) return;
         provider.endDriverSession();
+        _manageGpsTracking(false);
         setState(() {
           _activeTripId = null;
           _activeTripType = null;

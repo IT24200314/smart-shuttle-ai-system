@@ -82,8 +82,8 @@ def get_live_location(bus_id: str = "NB-2341"):
             peak_visible_count = data.get("peak_visible_count", effective_estimated_count)
             res = {
                 "bus_id": bus_id,
-                "lat_percent": data.get("latitude", 0.5), # match frontend naming
-                "lng_percent": data.get("longitude", 0.5), 
+                "lat_percent": data.get("latitude", 7.2801), # match frontend naming
+                "lng_percent": data.get("longitude", 80.7020), 
                 "speed": data.get("speed", 0),
                 "available_seats": data.get("available_seats", 0),
                 "status": data.get("status", "idle"),
@@ -106,8 +106,8 @@ def get_live_location(bus_id: str = "NB-2341"):
             return res
         fallback_res = {
             "bus_id": bus_id,
-            "lat_percent": 0.5,
-            "lng_percent": 0.5,
+            "lat_percent": 7.2801,
+            "lng_percent": 80.7020,
             "speed": 0,
             "available_seats": 0,
             "status": "offline",
