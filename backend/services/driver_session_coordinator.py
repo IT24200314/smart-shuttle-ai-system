@@ -28,6 +28,10 @@ from utils.firebase_config import db
 STALE_ACTIVE_TRIP_TTL_SECONDS = 30.0
 TERMINAL_AI_STATES = {"stopped", "completed", "failed", "idle"}
 INACTIVE_LIVE_STATUS = "inactive"
+PERADENIYA_TOWN_LAT = 7.2636
+PERADENIYA_TOWN_LNG = 80.5928
+SLIIT_KANDY_LAT = 7.2911
+SLIIT_KANDY_LNG = 80.6345
 
 
 def _now_iso() -> str:
@@ -74,6 +78,19 @@ def _normalize_trip_status(value: Any) -> str:
 
 def _normalize_ai_state(value: Any) -> str:
     return str(value or "").strip().lower()
+
+
+def _normalize_trip_type(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _resolve_trip_start_location(trip_type: Any) -> tuple[float, float]:
+    normalized = _normalize_trip_type(trip_type)
+    if normalized == "morning":
+        return PERADENIYA_TOWN_LAT, PERADENIYA_TOWN_LNG
+    if normalized in {"evening", "special"}:
+        return SLIIT_KANDY_LAT, SLIIT_KANDY_LNG
+    return SLIIT_KANDY_LAT, SLIIT_KANDY_LNG
 
 
 def _extract_trip_type(live_data: dict[str, Any]) -> str | None:
@@ -546,6 +563,7 @@ class DriverSessionCoordinator:
             trip_id = _generate_trip_id()
             timestamp = _now_iso()
             print(f"[FLOW] Start Session triggered for bus {req.bus_id}.")
+            start_lat, start_lng = _resolve_trip_start_location(req.trip_type)
 
             db.collection("trips").document(trip_id).set(
                 {
@@ -587,6 +605,10 @@ class DriverSessionCoordinator:
                     "estimated_passenger_count": 0,
                     "ai_state": "starting",
                     "started_at": timestamp,
+                    "latitude": start_lat,
+                    "longitude": start_lng,
+                    "speed": 0,
+                    "location_source": "trip_start",
                     "driver_id": driver_identity["driver_id"],
                     "driver_email": driver_identity["driver_email"],
                     "driver_name": driver_identity["driver_name"],

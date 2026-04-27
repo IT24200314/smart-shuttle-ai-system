@@ -1,0 +1,13 @@
+train: /content/drive/MyDrive/Project.v6-final-version-v8.yolov11/train/images
+val: /content/drive/MyDrive/Project.v6-final-version-v8.yolov11/valid/images
+test:/content/drive/MyDrive/Project.v6-final-version-v8.yolov11/test/images
+
+nc: 4
+names: ['Bag', 'Bottle', 'Laptop', 'Umbrella']
+
+roboflow:
+  workspace: mithejas-workspace
+  project: project-7souo
+  version: 6
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/mithejas-workspace/project-7souo/dataset/6

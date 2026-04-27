@@ -9,6 +9,30 @@ router = APIRouter()
 # Simple TTL Cache for live location polling
 LIVE_LOCATION_CACHE = {}
 CACHE_TTL = 3.0  # seconds
+PERADENIYA_TOWN_LAT = 7.2636
+PERADENIYA_TOWN_LNG = 80.5928
+SLIIT_KANDY_LAT = 7.2911
+SLIIT_KANDY_LNG = 80.6345
+
+
+def _normalize_trip_type(value) -> str:
+    return str(value or "").strip().lower()
+
+
+def _trip_start_location(trip_type) -> tuple[float, float]:
+    normalized = _normalize_trip_type(trip_type)
+    if normalized == "morning":
+        return PERADENIYA_TOWN_LAT, PERADENIYA_TOWN_LNG
+    if normalized in {"evening", "special"}:
+        return SLIIT_KANDY_LAT, SLIIT_KANDY_LNG
+    return SLIIT_KANDY_LAT, SLIIT_KANDY_LNG
+
+
+def _coerce_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 @router.get("/map/routes")
 def get_routes():
@@ -37,6 +61,7 @@ def update_gps(req: GPSUpdateRequest):
             'latitude': req.latitude,
             'longitude': req.longitude,
             'speed': req.speed,
+            'location_source': 'gps',
             'last_updated': datetime.now().isoformat()
         })
         
@@ -79,20 +104,31 @@ def get_live_location(bus_id: str = "NB-2341"):
                 if data.get("ai_state") in {"stopped", "completed", "failed"}
                 else estimated_passenger_count_live
             )
+            trip_type = data.get("tripType")
+            lat = _coerce_float(data.get("latitude"))
+            lng = _coerce_float(data.get("longitude"))
+            location_source = str(data.get("location_source") or "").strip().lower()
+            if lat is None or lng is None:
+                lat, lng = _trip_start_location(trip_type)
+                if not location_source:
+                    location_source = "trip_start"
+            elif not location_source:
+                location_source = "gps"
             peak_visible_count = data.get("peak_visible_count", effective_estimated_count)
             res = {
                 "bus_id": bus_id,
-                "lat_percent": data.get("latitude", 7.2801), # match frontend naming
-                "lng_percent": data.get("longitude", 80.7020), 
+                "lat_percent": lat, # match frontend naming
+                "lng_percent": lng, 
                 "speed": data.get("speed", 0),
                 "available_seats": data.get("available_seats", 0),
                 "status": data.get("status", "idle"),
                 "eta_min": 7,
                 "trip_id": data.get("trip_id"),
-                "trip_type": data.get("tripType"),
+                "trip_type": trip_type,
                 "driver_id": data.get("driver_id"),
                 "driver_email": data.get("driver_email"),
                 "driver_name": data.get("driver_name"),
+                "location_source": location_source,
                 "passenger_count": effective_estimated_count,
                 "estimated_passenger_count": effective_estimated_count,
                 "estimated_passenger_count_live": estimated_passenger_count_live,
@@ -117,6 +153,7 @@ def get_live_location(bus_id: str = "NB-2341"):
             "driver_id": None,
             "driver_email": None,
             "driver_name": None,
+            "location_source": "offline",
             "passenger_count": 0,
             "estimated_passenger_count": 0,
             "estimated_passenger_count_live": 0,

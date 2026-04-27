@@ -73,17 +73,35 @@ class FeedbackService:
     @staticmethod
     def list_completed_trips(limit: int = 10) -> list[tuple[str, dict]]:
         limit = max(1, min(limit, 50))
-        docs = (
-            db.collection("trips")
-            .where(filter=FieldFilter("status", "in", ["completed", "COMPLETED"]))
-            .order_by("actualEndTime", direction="DESCENDING")
-            .limit(limit)
-            .stream()
-        )
         trips: list[tuple[str, dict]] = []
-        for doc in docs:
-            trips.append((doc.id, doc.to_dict() or {}))
-        return trips
+        seen: set[str] = set()
+
+        # Keep this query index-light for student demos. Firestore often needs a
+        # composite index for where + order_by, so sorting is done in Python.
+        for status in ("completed", "COMPLETED", "Completed"):
+            docs = (
+                db.collection("trips")
+                .where(filter=FieldFilter("status", "==", status))
+                .stream()
+            )
+            for doc in docs:
+                if doc.id in seen:
+                    continue
+                seen.add(doc.id)
+                trips.append((doc.id, doc.to_dict() or {}))
+
+        def end_time_key(item: tuple[str, dict]) -> str:
+            data = item[1]
+            return str(
+                data.get("actualEndTime")
+                or data.get("actual_end_time")
+                or data.get("updated_at")
+                or data.get("created_at")
+                or ""
+            )
+
+        trips.sort(key=end_time_key, reverse=True)
+        return trips[:limit]
 
     @staticmethod
     def assert_completed_trip(trip_id: str) -> tuple[str, dict]:
@@ -161,7 +179,12 @@ class FeedbackService:
         timestamp = _now_iso()
         current = existing.to_dict() or {}
 
-        action = "updated" if existing.exists else "created"
+        if existing.exists:
+            raise HTTPException(
+                status_code=409,
+                detail="Feedback already submitted for this trip.",
+            )
+
         payload = {
             "feedback_id": feedback_id,
             "trip_id": trip_id,
@@ -176,7 +199,7 @@ class FeedbackService:
         }
         doc_ref.set(payload)
         FeedbackService._refresh_trip_feedback_summary(trip_id)
-        return action, _feedback_to_response(feedback_id, payload)
+        return "created", _feedback_to_response(feedback_id, payload)
 
     @staticmethod
     def update_feedback(

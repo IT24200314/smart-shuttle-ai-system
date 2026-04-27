@@ -6,10 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:js' as js; // Needed for map availability check on web
 import 'package:http/http.dart' as http;
 import '../../theme/app_theme.dart';
 import '../../providers/app_state_provider.dart';
+import '../../utils/map_js_checker.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/crowd_density_badge.dart';
 import '../../widgets/theme_toggle_button.dart';
@@ -88,33 +88,24 @@ class _StudentMapScreenState extends State<StudentMapScreen>
     // Give JS a moment to initialize
     await Future.delayed(const Duration(milliseconds: 500));
 
-    try {
-      // Check if 'google' and 'google.maps' exist in the JS context
-      final googleExists = js.context.hasProperty('google');
-      if (googleExists) {
-        final google = js.context['google'];
-        final mapsExists = google != null && google.hasProperty('maps');
-
-        if (mapsExists) {
-          if (mounted) {
-            setState(() {
-              _isMapAvailable = true;
-              _isMapChecking = false;
-            });
-          }
-          return;
-        }
-      }
-      throw 'Google Maps JS SDK not found. Check your API key and connection.';
-    } catch (e) {
-      debugPrint('Map verification failed: $e');
+    final result = await checkGoogleMapsLibrary();
+    if (result.hasGoogleMaps) {
       if (mounted) {
         setState(() {
-          _isMapAvailable = false;
+          _isMapAvailable = true;
           _isMapChecking = false;
-          _mapInitError = e.toString();
         });
       }
+      return;
+    }
+
+    debugPrint('Map verification failed: ${result.error}');
+    if (mounted) {
+      setState(() {
+        _isMapAvailable = false;
+        _isMapChecking = false;
+        _mapInitError = result.error ?? 'Unknown map initialization error.';
+      });
     }
   }
 
