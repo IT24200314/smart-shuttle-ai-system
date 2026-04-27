@@ -1,26 +1,35 @@
 # IDE files
 .idea/
+.vscode/
 *.iml
 
 # Model files (ignore all .pt by default)
 *.pt
 *.weights
+*.onnx
 # Allow production model weights
 !/ai_models/driver_behavior/best.pt
 !/ai_models/passenger_counting/models/baseline/weights/best.pt
 
 # Output files
+*.zip
 *.avi
 *.mp4
+artifacts/
+scratch/
+runs/
+build/
 
 # Python cache
 __pycache__/
 *.pyc
 
 # Environment
+node_modules/
 venv/
 .venv/
 .venv*/
+.venv311/
 .env
 *.env
 .env.*
@@ -33,13 +42,15 @@ backend/database/serviceAccountKey.local.json
 !backend/database/serviceAccountKey.example.json
 
 # Firebase config backups (keep only the canonical tracked files)
+google-services.json
 frontend/smart_shuttle_app/android/**/google-services*.json
-!frontend/smart_shuttle_app/android/app/google-services.json
 frontend/smart_shuttle_app/ios/**/GoogleService-Info*.plist
-!frontend/smart_shuttle_app/ios/Runner/GoogleService-Info.plist
 
 # Local AI training artifacts
+/runs/
+/ai model data set/
 /ai_models/passenger_counting/datasets/
+/ai_models/passenger_counting/**/runs/
 /ai_models/passenger_counting/runs/
 /ai_models/driver_behavior/dataset/
 /ai_models/driver_behavior/runs/

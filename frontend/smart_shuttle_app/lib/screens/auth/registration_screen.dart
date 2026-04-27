@@ -25,10 +25,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   String _selectedRole = 'student'; // Defaults to student
 
@@ -37,12 +40,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
   void _handleRegister() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim().toLowerCase();
@@ -63,7 +70,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           .timeout(const Duration(seconds: 5));
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -72,37 +81,54 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 style: GoogleFonts.inter(color: AppTheme.onAccent)),
             backgroundColor: AppTheme.positive,
             behavior: SnackBarBehavior.floating,
-            shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+            shape:
+                const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
           ),
         );
         Navigator.pushReplacement(
             context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       } else {
-        final err =
-            Map<String, dynamic>.from(json.decode(res.body))['detail'] ??
-                'Registration failed';
+        final payload = Map<String, dynamic>.from(json.decode(res.body));
+        final err = _messageFromPayload(payload, 'Registration failed');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(err, style: GoogleFonts.inter(color: AppTheme.onAccent)),
+            content:
+                Text(err, style: GoogleFonts.inter(color: AppTheme.onAccent)),
             backgroundColor: AppTheme.danger,
             behavior: SnackBarBehavior.floating,
-            shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+            shape:
+                const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('API Offline: Start Python Server',
               style: GoogleFonts.inter(color: AppTheme.onAccent)),
           backgroundColor: AppTheme.danger,
           behavior: SnackBarBehavior.floating,
-          shape: const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
+          shape:
+              const RoundedRectangleBorder(borderRadius: AppTheme.chipRadius),
         ),
       );
     }
+  }
+
+  String _messageFromPayload(Map<String, dynamic> payload, String fallback) {
+    final detail = payload['detail'];
+    if (detail is String) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] != null) {
+        return first['msg'].toString();
+      }
+    }
+    return fallback;
   }
 
   @override
@@ -178,8 +204,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     icon: Icons.person_outline_rounded,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
+                    final name = v?.trim() ?? '';
+                    if (name.isEmpty) {
                       return 'Enter your full name';
+                    }
+                    if (name.length < 2) {
+                      return 'Full name is too short';
                     }
                     return null;
                   },
@@ -199,10 +229,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     icon: Icons.email_outlined,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
+                    final email = v?.trim() ?? '';
+                    if (email.isEmpty) {
                       return 'Enter your email';
                     }
-                    if (!v.contains('@')) return 'Enter a valid email';
+                    if (!_emailPattern.hasMatch(email)) {
+                      return 'Enter a valid email address';
+                    }
                     return null;
                   },
                 ),
@@ -227,6 +260,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _selectedRole = v);
+                  },
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Select your account type';
+                    }
+                    return null;
                   },
                 ),
                 const SizedBox(height: 20),
@@ -256,9 +295,48 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Enter your password';
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Enter your password';
+                    }
                     if (v.length < 6) {
                       return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                const _Label('Confirm Password'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _confirmPasswordCtrl,
+                  obscureText: _obscureConfirmPassword,
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary, fontSize: 14),
+                  decoration: _inputDeco(
+                    hint: 'Confirm your password',
+                    icon: Icons.lock_reset_rounded,
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppTheme.textMuted,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(
+                        () =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword,
+                      ),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Confirm your password';
+                    }
+                    if (v != _passwordCtrl.text) {
+                      return 'Passwords do not match';
                     }
                     return null;
                   },

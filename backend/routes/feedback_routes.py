@@ -30,6 +30,24 @@ def get_feedback_eligible_trip(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/feedback/eligible-trips")
+def get_feedback_eligible_trips(
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: dict = Depends(require_student),
+):
+    _ = current_user
+    try:
+        trips = FeedbackService.get_feedback_eligible_trips(limit=limit)
+        return {
+            "items": [trip.model_dump() for trip in trips],
+            "total": len(trips),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/feedback")
 def submit_feedback(
     req: FeedbackSubmitRequest,

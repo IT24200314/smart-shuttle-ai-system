@@ -16,6 +16,7 @@ from services.driver_behavior_service import (
     DRIVER_BEHAVIOR_PREVIEW_ENABLED,
     driver_behavior_session_manager,
 )
+from services.ai_lost_found_service import launch_lost_found_ai
 from services.passenger_counting_service import (
     AI_PREVIEW_ENABLED,
     passenger_counting_session_manager,
@@ -761,6 +762,13 @@ class DriverSessionCoordinator:
                 "status": INACTIVE_LIVE_STATUS,
                 "ai_state": "stopped",
             }
+            print("[LOST_FOUND_FLOW] Stop Session completed; starting demo preview")
+            lost_found_session = launch_lost_found_ai(
+                bus_id=req.bus_id,
+                trip_id=str(latest_live_data.get("trip_id") or live_data.get("trip_id") or ""),
+                duration_seconds=60,
+                preview=True,
+            )
             return _build_stop_response(
                 bus_id=req.bus_id,
                 latest_live_data=latest_live_data,
@@ -774,7 +782,7 @@ class DriverSessionCoordinator:
                     if status != "active"
                     else "AI session stopped successfully"
                 ),
-            )
+            ) | {"lost_found_ai_session": lost_found_session}
         except HTTPException:
             raise
         except Exception as exc:
@@ -924,6 +932,13 @@ class DriverSessionCoordinator:
                 f"[FLOW] end-trip saved trips/{trip_id} with aiPassengerCount={ai_count}, "
                 f"soldTicketCount={total_tickets}, unpaidPassengerCount={unpaid}."
             )
+            print("[LOST_FOUND_FLOW] End trip completed")
+            lost_found_session = launch_lost_found_ai(
+                bus_id=req.bus_id,
+                trip_id=str(trip_id),
+                duration_seconds=60,
+                preview=True,
+            )
 
             return {
                 "message": "Trip finalized securely.",
@@ -937,6 +952,7 @@ class DriverSessionCoordinator:
                 "ai_stop": passenger_counting_stop,
                 "passenger_counting_session": passenger_counting_stop,
                 "driver_behavior_session": driver_behavior_stop,
+                "lost_found_ai_session": lost_found_session,
             }
         except HTTPException:
             raise

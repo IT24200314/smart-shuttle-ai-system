@@ -24,17 +24,18 @@ class StudentMapScreen extends StatefulWidget {
   State<StudentMapScreen> createState() => _StudentMapScreenState();
 }
 
-class _StudentMapScreenState extends State<StudentMapScreen> with TickerProviderStateMixin {
+class _StudentMapScreenState extends State<StudentMapScreen>
+    with TickerProviderStateMixin {
   late AnimationController _pulseCtrl;
 
   final Completer<GoogleMapController> _mapController = Completer();
   bool _autoCenterOnBus = false;
-  
+
   // -- Map Stability States --
   bool _isMapAvailable = false;
   bool _isMapChecking = true;
   String? _mapInitError;
-  
+
   Timer? _pollTimer;
   StreamSubscription<Position>? _positionStream;
 
@@ -43,13 +44,14 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
 
   // Bus position from backend (SLIIT Kandy location approx as default)
   LatLng _busPos = const LatLng(7.2801, 80.7020);
-  
+
   String _busId = 'NB-2341';
   int _currentSpeed = 0;
   String _stopStatus = 'En route';
   String? _feedbackTripId;
   String? _feedbackTripType;
   String? _feedbackTripEndedAt;
+  List<_FeedbackTrip> _recentFeedbackTrips = const [];
 
   String _selectedRoute = 'Route A — Main Gate';
   final List<String> _routes = [
@@ -62,8 +64,8 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
   void initState() {
     super.initState();
     _pulseCtrl = AnimationController(
-       vsync: this,
-       duration: const Duration(milliseconds: 1200),
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
 
     _startUserLocationTracking();
@@ -74,7 +76,12 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
   /// Checks if the Google Maps library is actually loaded (critical for Web)
   Future<void> _verifyMapAvailability() async {
     if (!kIsWeb) {
-      if (mounted) setState(() { _isMapAvailable = true; _isMapChecking = false; });
+      if (mounted) {
+        setState(() {
+          _isMapAvailable = true;
+          _isMapChecking = false;
+        });
+      }
       return;
     }
 
@@ -87,9 +94,14 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
       if (googleExists) {
         final google = js.context['google'];
         final mapsExists = google != null && google.hasProperty('maps');
-        
+
         if (mapsExists) {
-          if (mounted) setState(() { _isMapAvailable = true; _isMapChecking = false; });
+          if (mounted) {
+            setState(() {
+              _isMapAvailable = true;
+              _isMapChecking = false;
+            });
+          }
           return;
         }
       }
@@ -127,13 +139,14 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
     await _fetchLiveLocation();
     await _fetchFeedbackEligibility();
     if (_autoCenterOnBus) {
-      _centerOnBus(); 
+      _centerOnBus();
     }
   }
 
   Future<void> _fetchLiveLocation() async {
     try {
-      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/map/live-location'))
+      final res = await http
+          .get(Uri.parse('${ApiConfig.baseUrl}/map/live-location'))
           .timeout(const Duration(seconds: 2));
 
       if (res.statusCode == 200 && mounted) {
@@ -148,7 +161,7 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
           _stopStatus = data['status'] ?? 'Active';
 
           if (data['eta_min'] != null) {
-             context.read<AppStateProvider>().setEta(data['eta_min']);
+            context.read<AppStateProvider>().setEta(data['eta_min']);
           }
         });
         _updateMarkers();
@@ -159,33 +172,65 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
   Future<void> _fetchFeedbackEligibility() async {
     final appState = context.read<AppStateProvider>();
     final token = appState.jwtToken;
-    if (token == null || token.isEmpty || appState.currentRole != UserRole.student) {
+    if (token == null ||
+        token.isEmpty ||
+        appState.currentRole != UserRole.student) {
       if (!mounted) return;
       setState(() {
         _feedbackTripId = null;
         _feedbackTripType = null;
         _feedbackTripEndedAt = null;
+        _recentFeedbackTrips = const [];
       });
       return;
     }
 
     try {
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/feedback/eligible-trip'),
+      final tripsRes = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/feedback/eligible-trips?limit=8'),
         headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 6));
+
+      final feedbackRes = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/feedback?mine=true'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 6));
 
       if (!mounted) return;
 
-      if (res.statusCode == 200) {
-        final data = Map<String, dynamic>.from(json.decode(res.body));
+      if (tripsRes.statusCode == 200) {
+        final tripsPayload =
+            Map<String, dynamic>.from(json.decode(tripsRes.body));
+        final submittedTripIds = <String>{};
+        if (feedbackRes.statusCode == 200) {
+          final feedbackPayload =
+              Map<String, dynamic>.from(json.decode(feedbackRes.body));
+          for (final item
+              in List<dynamic>.from(feedbackPayload['items'] ?? const [])) {
+            final feedback = Map<String, dynamic>.from(item as Map);
+            final tripId = feedback['trip_id']?.toString();
+            if (tripId != null && tripId.isNotEmpty) {
+              submittedTripIds.add(tripId);
+            }
+          }
+        }
+
+        final trips = List<dynamic>.from(tripsPayload['items'] ?? const [])
+            .map((item) => _FeedbackTrip.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                  submittedTripIds: submittedTripIds,
+                ))
+            .toList();
+        final latest = trips.isNotEmpty ? trips.first : null;
         setState(() {
-          _feedbackTripId = data['trip_id']?.toString();
-          _feedbackTripType = data['trip_type']?.toString();
-          _feedbackTripEndedAt = data['actual_end_time']?.toString();
+          _recentFeedbackTrips = trips;
+          _feedbackTripId = latest?.tripId;
+          _feedbackTripType = latest?.tripType;
+          _feedbackTripEndedAt = latest?.completedAt;
         });
       } else {
         setState(() {
+          _recentFeedbackTrips = const [];
           _feedbackTripId = null;
           _feedbackTripType = null;
           _feedbackTripEndedAt = null;
@@ -194,6 +239,7 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        _recentFeedbackTrips = const [];
         _feedbackTripId = null;
         _feedbackTripType = null;
         _feedbackTripEndedAt = null;
@@ -273,7 +319,8 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
         Marker(
           markerId: const MarkerId('user_marker'),
           position: _userPos!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
           infoWindow: const InfoWindow(title: 'You'),
         ),
       );
@@ -291,12 +338,21 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
     super.dispose();
   }
 
-  void _openFeedback() {
-    if (_feedbackTripId == null || _feedbackTripId!.isEmpty) {
+  Future<void> _openFeedback([_FeedbackTrip? trip]) async {
+    final targetTrip = trip ??
+        (_feedbackTripId == null
+            ? null
+            : _FeedbackTrip(
+                tripId: _feedbackTripId!,
+                tripType: _feedbackTripType,
+                completedAt: _feedbackTripEndedAt,
+              ));
+
+    if (targetTrip == null || targetTrip.tripId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Feedback becomes available after the most recently completed trip.',
+            'Feedback is available after trip completion.',
             style: GoogleFonts.inter(color: AppTheme.onAccent),
           ),
           backgroundColor: AppTheme.warning,
@@ -305,16 +361,32 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
       return;
     }
 
-    Navigator.push(
+    if (targetTrip.feedbackSubmitted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Feedback submitted for this trip.',
+            style: GoogleFonts.inter(color: AppTheme.onAccent),
+          ),
+          backgroundColor: AppTheme.positive,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => StudentFeedbackScreen(
-          tripId: _feedbackTripId!,
-          tripType: _feedbackTripType,
-          completedAt: _feedbackTripEndedAt,
+          tripId: targetTrip.tripId,
+          tripType: targetTrip.tripType,
+          completedAt: targetTrip.completedAt,
         ),
       ),
     );
+    if (mounted) {
+      await _fetchFeedbackEligibility();
+    }
   }
 
   void _openLostFound() {
@@ -359,7 +431,8 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
             Text(
               _mapInitError ?? 'The map could not be loaded on this device.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: AppTheme.textSecondary, fontSize: 13),
+              style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -377,7 +450,8 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
                 setState(() => _isMapAvailable = true); // Risky force-try
               },
               child: Text('Force Load (Developer Mode)',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppTheme.textMuted)),
+                  style: GoogleFonts.inter(
+                      fontSize: 11, color: AppTheme.textMuted)),
             ),
           ],
         ),
@@ -418,78 +492,110 @@ class _StudentMapScreenState extends State<StudentMapScreen> with TickerProvider
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-         backgroundColor: AppTheme.surface,
-         elevation: 0,
-         leading: IconButton(
-           icon: Icon(Icons.arrow_back_ios_new_rounded,
-               color: AppTheme.textSecondary, size: 20),
-           onPressed: () => Navigator.pop(context),
-         ),
-         title: Column(
-           crossAxisAlignment: CrossAxisAlignment.start,
-           children: [
-             Text('Live Bus Tracker',
-                 style: GoogleFonts.inter(
-                     color: AppTheme.textPrimary,
-                     fontSize: 16,
-                     fontWeight: FontWeight.w700)),
-             Text('Student View',
-                 style: GoogleFonts.inter(
-                     color: AppTheme.textSecondary, fontSize: 11)),
-           ],
-         ),
-         actions: [
-           const ThemeToggleButton(compact: true),
-           IconButton(
-             tooltip: _autoCenterOnBus ? 'Auto-center ON' : 'Auto-center OFF',
-             icon: Icon(
-               _autoCenterOnBus ? Icons.my_location_rounded : Icons.location_searching_rounded,
-               color: _autoCenterOnBus ? AppTheme.accent : AppTheme.textSecondary,
-               size: 20,
-             ),
-             onPressed: () {
-               setState(() => _autoCenterOnBus = !_autoCenterOnBus);
-               if (_autoCenterOnBus) {
-                  _centerOnBus();
-               }
-             },
-           ),
-           IconButton(
-             icon: Icon(Icons.refresh_rounded, color: AppTheme.textSecondary, size: 20),
-             onPressed: _refreshStudentData,
-           ),
-           const SizedBox(width: 8),
-         ],
+        backgroundColor: AppTheme.surface,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              color: AppTheme.textSecondary, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Live Bus Tracker',
+                style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700)),
+            Text('Student View',
+                style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary, fontSize: 11)),
+          ],
+        ),
+        actions: [
+          const ThemeToggleButton(compact: true),
+          IconButton(
+            tooltip: _autoCenterOnBus ? 'Auto-center ON' : 'Auto-center OFF',
+            icon: Icon(
+              _autoCenterOnBus
+                  ? Icons.my_location_rounded
+                  : Icons.location_searching_rounded,
+              color:
+                  _autoCenterOnBus ? AppTheme.accent : AppTheme.textSecondary,
+              size: 20,
+            ),
+            onPressed: () {
+              setState(() => _autoCenterOnBus = !_autoCenterOnBus);
+              if (_autoCenterOnBus) {
+                _centerOnBus();
+              }
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh_rounded,
+                color: AppTheme.textSecondary, size: 20),
+            onPressed: _refreshStudentData,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Stack(
-         children: [
-           // ── Google Map ──────────────────────────────────
-           Positioned.fill(
-             bottom: maxSheetHeight - 20, // Space for Bottom Sheet
-             child: _buildMapLayer(),
-           ),
+        children: [
+          // ── Google Map ──────────────────────────────────
+          Positioned.fill(
+            bottom: maxSheetHeight - 20, // Space for Bottom Sheet
+            child: _buildMapLayer(),
+          ),
 
-           // ── Bottom Info Sheet ───────────────────────────────
-           Positioned(
-             left: 0,
-             right: 0,
-             bottom: 0,
-             child: _BottomSheet(
-               provider: provider,
-               selectedRoute: _selectedRoute,
-               routes: _routes,
-               onRouteChanged: (r) => setState(() => _selectedRoute = r!),
-               busId: _busId,
-               currentSpeed: _currentSpeed,
-               stopStatus: _stopStatus,
-               feedbackTripId: _feedbackTripId,
-               feedbackTripType: _feedbackTripType,
-               onOpenFeedback: _openFeedback,
-               onOpenLostFound: _openLostFound,
-             ),
-           ),
-         ],
+          // ── Bottom Info Sheet ───────────────────────────────
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _BottomSheet(
+              provider: provider,
+              selectedRoute: _selectedRoute,
+              routes: _routes,
+              onRouteChanged: (r) => setState(() => _selectedRoute = r!),
+              busId: _busId,
+              currentSpeed: _currentSpeed,
+              stopStatus: _stopStatus,
+              feedbackTripId: _feedbackTripId,
+              feedbackTripType: _feedbackTripType,
+              recentFeedbackTrips: _recentFeedbackTrips,
+              onOpenFeedback: _openFeedback,
+              onOpenLostFound: _openLostFound,
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _FeedbackTrip {
+  final String tripId;
+  final String? tripType;
+  final String? completedAt;
+  final bool feedbackSubmitted;
+
+  const _FeedbackTrip({
+    required this.tripId,
+    this.tripType,
+    this.completedAt,
+    this.feedbackSubmitted = false,
+  });
+
+  factory _FeedbackTrip.fromJson(
+    Map<String, dynamic> json, {
+    required Set<String> submittedTripIds,
+  }) {
+    final tripId = json['trip_id']?.toString() ?? '';
+    return _FeedbackTrip(
+      tripId: tripId,
+      tripType: json['trip_type']?.toString(),
+      completedAt: json['actual_end_time']?.toString(),
+      feedbackSubmitted: submittedTripIds.contains(tripId),
     );
   }
 }
@@ -505,7 +611,8 @@ class _BottomSheet extends StatelessWidget {
   final String stopStatus;
   final String? feedbackTripId;
   final String? feedbackTripType;
-  final VoidCallback onOpenFeedback;
+  final List<_FeedbackTrip> recentFeedbackTrips;
+  final Future<void> Function([_FeedbackTrip? trip]) onOpenFeedback;
   final VoidCallback onOpenLostFound;
 
   const _BottomSheet({
@@ -518,6 +625,7 @@ class _BottomSheet extends StatelessWidget {
     required this.stopStatus,
     required this.feedbackTripId,
     required this.feedbackTripType,
+    required this.recentFeedbackTrips,
     required this.onOpenFeedback,
     required this.onOpenLostFound,
   });
@@ -676,7 +784,7 @@ class _BottomSheet extends StatelessWidget {
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth > 420;
                   final feedbackButton = ElevatedButton.icon(
-                    onPressed: onOpenFeedback,
+                    onPressed: () => onOpenFeedback(),
                     icon: const Icon(Icons.rate_review_rounded, size: 18),
                     label: Text(
                       feedbackTripId == null
@@ -733,11 +841,35 @@ class _BottomSheet extends StatelessWidget {
                   );
                 },
               ),
+              if (recentFeedbackTrips.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Recent Completed Trips',
+                    style: GoogleFonts.inter(
+                      color: AppTheme.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...recentFeedbackTrips.map(
+                  (trip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _RecentTripFeedbackTile(
+                      trip: trip,
+                      onTap: () => onOpenFeedback(trip),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               Text(
                 feedbackTripId == null
-                    ? 'Feedback opens after your latest completed trip is posted.'
-                    : 'Feedback target: ${feedbackTripType ?? 'Completed Trip'}',
+                    ? 'Feedback is available after trip completion.'
+                    : 'Choose any completed trip above to submit feedback.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: AppTheme.textMuted,
@@ -747,6 +879,76 @@ class _BottomSheet extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RecentTripFeedbackTile extends StatelessWidget {
+  final _FeedbackTrip trip;
+  final VoidCallback onTap;
+
+  const _RecentTripFeedbackTile({
+    required this.trip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh,
+        borderRadius: AppTheme.chipRadius,
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            trip.feedbackSubmitted
+                ? Icons.check_circle_rounded
+                : Icons.rate_review_rounded,
+            color: trip.feedbackSubmitted ? AppTheme.positive : AppTheme.accent,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  trip.tripType ?? 'Completed Trip',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Trip ID: ${trip.tripId}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: trip.feedbackSubmitted ? null : onTap,
+            child: Text(
+              trip.feedbackSubmitted ? 'Submitted' : 'Feedback',
+              style:
+                  GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
       ),
     );
   }

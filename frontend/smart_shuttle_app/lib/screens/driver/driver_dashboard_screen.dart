@@ -977,114 +977,83 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen>
                     ),
                     const SizedBox(height: 20),
                     GlassCard(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Safety Score',
-                              style: GoogleFonts.inter(
-                                  color: AppTheme.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 14),
+                          Text(
+                            'Safety Score',
+                            style: GoogleFonts.inter(
+                              color: AppTheme.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              final scoreDial = SizedBox(
-                                width: 86,
-                                height: 86,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      value: provider.safetyScore / 100,
-                                      strokeWidth: 7,
-                                      backgroundColor: AppTheme.border,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        _scoreColor(provider.safetyScore),
-                                      ),
-                                      strokeCap: StrokeCap.round,
-                                    ),
-                                    Text(
-                                      provider.safetyScore.toStringAsFixed(0),
-                                      style: GoogleFonts.inter(
-                                        color:
-                                            _scoreColor(provider.safetyScore),
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              final score = provider.safetyScore;
+                              final scoreColor = _scoreColor(score);
+                              final scoreBadge = _SafetyScoreBadge(
+                                score: score,
+                                color: scoreColor,
                               );
-                              final scoreDetails = Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    provider.safetyScore >= 85
-                                        ? 'Excellent - Keep it up!'
-                                        : provider.safetyScore >= 60
-                                            ? 'Caution - Check alerts'
-                                            : 'Poor - Needs attention',
-                                    style: GoogleFonts.inter(
-                                      color: _scoreColor(provider.safetyScore),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _DeductRow('Yawn detection', '-1 pts',
-                                      AppTheme.warning),
-                                  const SizedBox(height: 4),
-                                  _DeductRow('Phone use event', '-2 pts',
-                                      AppTheme.warning),
-                                  const SizedBox(height: 4),
-                                  _DeductRow(
-                                    'Drowsiness detection',
-                                    '-5 pts',
-                                    AppTheme.danger,
-                                  ),
-                                ],
+                              final penaltyPanel = _SafetyPenaltyPanel(
+                                color: scoreColor,
+                                status: score >= 85
+                                    ? 'Excellent - Keep it up!'
+                                    : score >= 60
+                                        ? 'Caution - Check alerts'
+                                        : 'Poor - Needs attention',
                               );
 
-                              if (constraints.maxWidth < 520) {
+                              if (constraints.maxWidth < 620) {
                                 return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    scoreDial,
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: scoreBadge,
+                                    ),
                                     const SizedBox(height: 16),
-                                    scoreDetails,
+                                    penaltyPanel,
                                   ],
                                 );
                               }
 
                               return Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  scoreDial,
-                                  const SizedBox(width: 18),
-                                  Expanded(child: scoreDetails),
+                                  scoreBadge,
+                                  const SizedBox(width: 22),
+                                  Expanded(child: penaltyPanel),
                                 ],
                               );
                             },
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
                           _ResponsiveTileRow(
                             children: [
-                              _StatTile(
+                              _SafetyMetricTile(
                                 icon: Icons.sentiment_very_satisfied_rounded,
                                 label: 'Yawns',
                                 value: '$_yawnCount',
+                                subtitle: 'Yawn detections',
                                 color: AppTheme.warning,
                               ),
-                              _StatTile(
+                              _SafetyMetricTile(
                                 icon: Icons.phone_android_rounded,
                                 label: 'Phone Use',
                                 value: '$_phoneUseCount',
+                                subtitle: 'Phone use events',
                                 color: AppTheme.warning,
                               ),
-                              _StatTile(
+                              _SafetyMetricTile(
                                 icon: Icons.remove_red_eye_rounded,
                                 label: 'Drowsiness',
                                 value: '$_drowsinessCount',
+                                subtitle: 'Drowsiness detections',
                                 color: AppTheme.danger,
                               ),
                             ],
@@ -1320,6 +1289,196 @@ class _ResponsiveTileRow extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _SafetyScoreBadge extends StatelessWidget {
+  final double score;
+  final Color color;
+
+  const _SafetyScoreBadge({
+    required this.score,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scoreText = score.round().clamp(0, 100).toString();
+    return Container(
+      width: 132,
+      height: 132,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.35), width: 1.4),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 112,
+            height: 112,
+            child: CircularProgressIndicator(
+              value: score.clamp(0, 100) / 100,
+              strokeWidth: 8,
+              backgroundColor: AppTheme.border,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              strokeCap: StrokeCap.round,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$scoreText%',
+                  style: GoogleFonts.inter(
+                    color: color,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Safety Score',
+                style: GoogleFonts.inter(
+                  color: AppTheme.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SafetyPenaltyPanel extends StatelessWidget {
+  final String status;
+  final Color color;
+
+  const _SafetyPenaltyPanel({
+    required this.status,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceHigh.withValues(alpha: 0.72),
+        borderRadius: AppTheme.cardRadius,
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            status,
+            style: GoogleFonts.inter(
+              color: color,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Penalty rules',
+            style: GoogleFonts.inter(
+              color: AppTheme.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _DeductRow('Yawn detection', '-1 pts', AppTheme.warning),
+          const SizedBox(height: 6),
+          _DeductRow('Phone use event', '-2 pts', AppTheme.warning),
+          const SizedBox(height: 6),
+          _DeductRow('Drowsiness detection', '-5 pts', AppTheme.danger),
+        ],
+      ),
+    );
+  }
+}
+
+class _SafetyMetricTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String subtitle;
+  final Color color;
+
+  const _SafetyMetricTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: AppTheme.chipRadius,
+              border: Border.all(color: color.withValues(alpha: 0.25)),
+            ),
+            child: Icon(icon, color: color, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -111,10 +111,29 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
   }
 
   Future<void> _saveFeedback() async {
+    final comment = _commentCtrl.text.trim();
+    if (widget.tripId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Missing trip ID. Please reopen this trip.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
     if (_rating == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please select a rating between 1 and 5 stars.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+    if (comment.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please add a short comment before submitting.'),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -136,7 +155,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
               'trip_id': widget.tripId,
               'student_id': provider.userId,
               'rating': _rating,
-              'comment': _commentCtrl.text.trim(),
+              'comment': comment,
             },
           ),
         );
@@ -147,7 +166,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
           body: jsonEncode(
             {
               'rating': _rating,
-              'comment': _commentCtrl.text.trim(),
+              'comment': comment,
             },
           ),
         );
@@ -174,7 +193,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              payload['detail']?.toString() ?? 'Unable to save feedback.',
+              _messageFromPayload(payload, 'Unable to save feedback.'),
               style: GoogleFonts.inter(color: AppTheme.onAccent),
             ),
             backgroundColor: AppTheme.danger,
@@ -197,6 +216,18 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  String _messageFromPayload(Map<String, dynamic> payload, String fallback) {
+    final detail = payload['detail'];
+    if (detail is String) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] != null) {
+        return first['msg'].toString();
+      }
+    }
+    return fallback;
   }
 
   Future<void> _deleteFeedback() async {
@@ -322,7 +353,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
                   fontWeight: FontWeight.w700),
             ),
             Text(
-              'Rate your most recent completed trip',
+              'Rate your selected completed trip',
               style: GoogleFonts.inter(
                   color: AppTheme.textSecondary, fontSize: 11),
             ),
@@ -389,7 +420,7 @@ class _StudentFeedbackScreenState extends State<StudentFeedbackScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Rate your latest shuttle experience',
+                                    'Rate this shuttle experience',
                                     style: GoogleFonts.inter(
                                       color: AppTheme.textPrimary,
                                       fontSize: 22,

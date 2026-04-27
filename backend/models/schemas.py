@@ -47,28 +47,50 @@ class AuthRegisterRequest(BaseModel):
     role: UserRole
     name: str = Field(min_length=1, max_length=120)
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: str) -> str:
-        return value.strip().lower()
+        cleaned = str(value or "").strip().lower()
+        if not cleaned:
+            raise ValueError("Email is required")
+        return cleaned
 
-    @field_validator("name")
+    @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: str) -> str:
-        cleaned = value.strip()
+        cleaned = str(value or "").strip()
         if not cleaned:
             raise ValueError("Name cannot be empty")
         return cleaned
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Password is required")
+        if len(value) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        return value
+
 
 class AuthLoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(pattern=r"^\S+@\S+\.\S+$")
+    password: str = Field(min_length=1)
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: str) -> str:
-        return value.strip().lower()
+        cleaned = str(value or "").strip().lower()
+        if not cleaned:
+            raise ValueError("Email is required")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Password is required")
+        return value
 
 
 class UserUpdateRequest(BaseModel):
@@ -78,15 +100,15 @@ class UserUpdateRequest(BaseModel):
     status: Optional[UserStatus] = None
     password: Optional[str] = Field(default=None, min_length=6)
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: Optional[str]) -> Optional[str]:
-        return value.strip().lower() if value is not None else value
+        return str(value).strip().lower() if value is not None else value
 
-    @field_validator("name")
+    @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: Optional[str]) -> Optional[str]:
-        return value.strip() if value is not None else value
+        return str(value).strip() if value is not None else value
 
 
 class UserResponse(BaseModel):
@@ -121,7 +143,10 @@ class FeedbackSubmitRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def normalize_comment(cls, value: Optional[str]) -> str:
-        return (value or "").strip()
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("Comment is required")
+        return cleaned
 
 
 class FeedbackUpdateRequest(BaseModel):
@@ -131,7 +156,10 @@ class FeedbackUpdateRequest(BaseModel):
     @field_validator("comment")
     @classmethod
     def normalize_comment(cls, value: Optional[str]) -> str:
-        return (value or "").strip()
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("Comment is required")
+        return cleaned
 
 
 class FeedbackResponse(BaseModel):

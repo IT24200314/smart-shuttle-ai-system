@@ -67,34 +67,34 @@ def _summary_from_items(items: list[FeedbackResponse]) -> tuple[float, dict[str,
 class FeedbackService:
     @staticmethod
     def get_latest_completed_trip() -> tuple[str, dict] | None:
+        trips = FeedbackService.list_completed_trips(limit=1)
+        return trips[0] if trips else None
+
+    @staticmethod
+    def list_completed_trips(limit: int = 10) -> list[tuple[str, dict]]:
+        limit = max(1, min(limit, 50))
         docs = (
             db.collection("trips")
             .where(filter=FieldFilter("status", "in", ["completed", "COMPLETED"]))
             .order_by("actualEndTime", direction="DESCENDING")
-            .limit(1)
+            .limit(limit)
             .stream()
         )
+        trips: list[tuple[str, dict]] = []
         for doc in docs:
-            return doc.id, doc.to_dict() or {}
-        return None
+            trips.append((doc.id, doc.to_dict() or {}))
+        return trips
 
     @staticmethod
-    def assert_latest_completed_trip(trip_id: str) -> tuple[str, dict]:
-        latest_completed_trip = FeedbackService.get_latest_completed_trip()
-        if not latest_completed_trip:
-            raise HTTPException(
-                status_code=404,
-                detail="No completed trip is available for feedback",
-            )
-
-        latest_trip_id, latest_trip_data = latest_completed_trip
-        if trip_id != latest_trip_id:
+    def assert_completed_trip(trip_id: str) -> tuple[str, dict]:
+        resolved_trip_id, trip_data = FeedbackService.get_trip_or_404(trip_id)
+        trip_status = str(trip_data.get("status", "")).lower()
+        if trip_status != "completed":
             raise HTTPException(
                 status_code=400,
-                detail="Feedback is only available for the most recently completed trip",
+                detail="Feedback is available after trip completion.",
             )
-
-        return latest_trip_id, latest_trip_data
+        return resolved_trip_id, trip_data
 
     @staticmethod
     def get_trip_or_404(trip_id: str) -> tuple[str, dict]:
@@ -153,15 +153,7 @@ class FeedbackService:
         rating: int,
         comment: Optional[str],
     ) -> tuple[str, FeedbackResponse]:
-        _, trip_data = FeedbackService.get_trip_or_404(trip_id)
-        trip_status = str(trip_data.get("status", "")).lower()
-        if trip_status != "completed":
-            raise HTTPException(
-                status_code=400,
-                detail="Feedback can only be submitted after the trip is completed",
-            )
-
-        FeedbackService.assert_latest_completed_trip(trip_id)
+        _, trip_data = FeedbackService.assert_completed_trip(trip_id)
 
         feedback_id = _feedback_doc_id(trip_id, student_id)
         doc_ref = db.collection("feedback").document(feedback_id)
@@ -194,7 +186,7 @@ class FeedbackService:
         comment: Optional[str],
     ) -> FeedbackResponse:
         _, current = FeedbackService.get_feedback_or_404(feedback_id)
-        FeedbackService.assert_latest_completed_trip(str(current.get("trip_id", "")))
+        FeedbackService.assert_completed_trip(str(current.get("trip_id", "")))
         payload = {
             **current,
             "rating": rating,
@@ -208,7 +200,7 @@ class FeedbackService:
     @staticmethod
     def delete_feedback(feedback_id: str) -> None:
         _, current = FeedbackService.get_feedback_or_404(feedback_id)
-        FeedbackService.assert_latest_completed_trip(str(current.get("trip_id", "")))
+        FeedbackService.assert_completed_trip(str(current.get("trip_id", "")))
         db.collection("feedback").document(feedback_id).delete()
         FeedbackService._refresh_trip_feedback_summary(current["trip_id"])
 
@@ -303,3 +295,18 @@ class FeedbackService:
             average_rating=float(trip_data.get("averageRating", 0) or 0),
             feedback_count=int(trip_data.get("feedbackCount", 0) or 0),
         )
+
+    @staticmethod
+    def get_feedback_eligible_trips(limit: int = 10) -> list[FeedbackEligibleTripResponse]:
+        trips = FeedbackService.list_completed_trips(limit=limit)
+        return [
+            FeedbackEligibleTripResponse(
+                trip_id=trip_id,
+                trip_type=trip_data.get("tripType"),
+                trip_status=str(trip_data.get("status", "completed")),
+                actual_end_time=trip_data.get("actualEndTime"),
+                average_rating=float(trip_data.get("averageRating", 0) or 0),
+                feedback_count=int(trip_data.get("feedbackCount", 0) or 0),
+            )
+            for trip_id, trip_data in trips
+        ]

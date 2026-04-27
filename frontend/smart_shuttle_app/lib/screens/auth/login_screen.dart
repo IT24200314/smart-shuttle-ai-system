@@ -29,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   @override
   void dispose() {
@@ -44,8 +45,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     final email = _emailCtrl.text.trim().toLowerCase();
     final password = _passwordCtrl.text;
@@ -60,7 +64,9 @@ class _LoginScreenState extends State<LoginScreen> {
           .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
 
       if (res.statusCode == 200) {
         final data = Map<String, dynamic>.from(json.decode(res.body));
@@ -119,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         final payload = Map<String, dynamic>.from(json.decode(res.body));
-        message = payload['detail']?.toString() ?? message;
+        message = _messageFromPayload(payload, message);
       } catch (_) {}
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -134,7 +140,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
 
       String errorMsg =
           'Cannot connect to server. Make sure the FastAPI backend is running.';
@@ -157,6 +165,18 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  String _messageFromPayload(Map<String, dynamic> payload, String fallback) {
+    final detail = payload['detail'];
+    if (detail is String) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] != null) {
+        return first['msg'].toString();
+      }
+    }
+    return fallback;
   }
 
   @override
@@ -529,11 +549,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 icon: Icons.email_outlined,
               ),
               validator: (value) {
-                if (value == null || value.trim().isEmpty) {
+                final email = value?.trim() ?? '';
+                if (email.isEmpty) {
                   return 'Enter your email';
                 }
-                if (!value.contains('@')) {
-                  return 'Enter a valid email';
+                if (!_emailPattern.hasMatch(email)) {
+                  return 'Enter a valid email address';
                 }
                 return null;
               },
@@ -570,11 +591,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
+                if (value == null || value.trim().isEmpty) {
                   return 'Enter your password';
-                }
-                if (value.length < 4) {
-                  return 'Password too short';
                 }
                 return null;
               },
