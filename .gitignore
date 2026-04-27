@@ -46,6 +46,8 @@ backend/database/serviceAccountKey.local.json
 google-services.json
 frontend/smart_shuttle_app/android/**/google-services*.json
 frontend/smart_shuttle_app/ios/**/GoogleService-Info*.plist
+frontend/smart_shuttle_app/android/app/1
+backend/database/1
 
 # Local AI training artifacts
 /runs/

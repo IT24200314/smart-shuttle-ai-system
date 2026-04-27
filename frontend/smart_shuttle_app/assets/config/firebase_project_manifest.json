@@ -1,6 +1,6 @@
 {
-  "project_id": "smart-shuttle-ai-b58f8",
-  "project_number": "317725246812",
+  "project_id": "driver-behavior-detectio-62d10",
+  "project_number": "661715418034",
   "android_package_name": "com.example.smart_shuttle",
   "service_account": {
     "env_var": "SMART_SHUTTLE_FIREBASE_SERVICE_ACCOUNT",
@@ -8,25 +8,11 @@
     "example_path": "backend/database/serviceAccountKey.example.json"
   },
   "platforms": {
-    "web": {
-      "api_key": "AIzaSyDZVvGX4XPlhgW5NUVKjs9IO2aPXE0WvGM",
-      "app_id": "1:317725246812:web:d50b5dda6ba6ce99826d99",
-      "messaging_sender_id": "317725246812",
-      "auth_domain": "smart-shuttle-ai-b58f8.firebaseapp.com",
-      "storage_bucket": "smart-shuttle-ai-b58f8.firebasestorage.app"
-    },
     "android": {
-      "api_key": "AIzaSyD58SrGEgMIZoBNGb8YpzaSHlBUnnbDbiA",
-      "app_id": "1:317725246812:android:21cb11899fd48454826d99",
-      "messaging_sender_id": "317725246812",
-      "storage_bucket": "smart-shuttle-ai-b58f8.firebasestorage.app"
-    },
-    "windows": {
-      "api_key": "AIzaSyDZVvGX4XPlhgW5NUVKjs9IO2aPXE0WvGM",
-      "app_id": "1:317725246812:web:d50b5dda6ba6ce99826d99",
-      "messaging_sender_id": "317725246812",
-      "auth_domain": "smart-shuttle-ai-b58f8.firebaseapp.com",
-      "storage_bucket": "smart-shuttle-ai-b58f8.firebasestorage.app"
+      "api_key": "AIzaSyBFQNEgT1mR4SjeQNAe-KDlCxWBqI7Aqdw",
+      "app_id": "1:661715418034:android:536c865dd905a35a3c02ab",
+      "messaging_sender_id": "661715418034",
+      "storage_bucket": "driver-behavior-detectio-62d10.firebasestorage.app"
     }
   }
 }

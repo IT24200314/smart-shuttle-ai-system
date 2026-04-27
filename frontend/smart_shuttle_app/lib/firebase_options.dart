@@ -31,11 +31,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD58SrGEgMIZoBNGb8YpzaSHlBUnnbDbiA',
-    appId: '1:317725246812:android:21cb11899fd48454826d99',
-    messagingSenderId: '317725246812',
-    projectId: 'smart-shuttle-ai-b58f8',
-    storageBucket: 'smart-shuttle-ai-b58f8.firebasestorage.app',
+    apiKey: 'AIzaSyBFQNEgT1mR4SjeQNAe-KDlCxWBqI7Aqdw',
+    appId: '1:661715418034:android:536c865dd905a35a3c02ab',
+    messagingSenderId: '661715418034',
+    projectId: 'driver-behavior-detectio-62d10',
+    storageBucket: 'driver-behavior-detectio-62d10.firebasestorage.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

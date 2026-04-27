@@ -14,6 +14,9 @@ class FirebaseProjectGuard {
     final manifest = await _loadManifest();
     final platformConfigs =
         Map<String, dynamic>.from(manifest['platforms'] as Map? ?? const {});
+    if (!platformConfigs.containsKey(platformKey)) {
+      return manifest;
+    }
     final platformConfig = Map<String, dynamic>.from(
       platformConfigs[platformKey] as Map? ?? const {},
     );

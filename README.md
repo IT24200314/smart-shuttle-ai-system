@@ -67,18 +67,22 @@ flutter run
 > Note: The app currently uses a mock initial router on the Login Screen (`lib/screens/auth/login_screen.dart`). Use `admin@shuttle.lk`, `driver@shuttle.lk`, or any other email to route to the respective dashboards.
 
 ### 3. Setup the AI Passenger Counter
-1. This repo is locked to Firebase project `smart-shuttle-ai-b58f8`.
-2. Add a backend Firebase Admin key from that same project using either:
+1. The current canonical Firebase project is `driver-behavior-detectio-62d10`.
+2. Firebase-verified demo platforms are Android app + backend.
+3. Add a backend Firebase Admin key from that same project using either:
    - `backend/database/serviceAccountKey.local.json`, or
    - the `SMART_SHUTTLE_FIREBASE_SERVICE_ACCOUNT` environment variable.
-   Save downloaded backend keys locally as `serviceAccountKey.local.json`; do not commit a raw `serviceAccountKey.json`.
-3. Verify that all Firebase config files point to the same project:
+   Save downloaded backend keys locally as `serviceAccountKey.local.json`.
+   Do not commit `serviceAccountKey.local.json`.
+4. Keep `frontend/smart_shuttle_app/android/app/google-services.json` local only. Do not commit it for a public repo.
+5. Always verify that the Android app and backend point to the same Firebase project:
    ```bash
    python scripts/verify_firebase_consistency.py
    ```
-4. Activate your Python virtual environment.
-5. Install the dependencies: `pip install ultralytics opencv-python firebase-admin`.
-6. Run the model:
+6. Web and Windows Firebase options may still contain older values and are not enforced by the manifest guard for this demo setup.
+7. Activate your Python virtual environment.
+8. Install the dependencies: `pip install ultralytics opencv-python firebase-admin`.
+9. Run the model:
    ```bash
    python ai_models/passenger_counting/test_yolo.py
    ```
